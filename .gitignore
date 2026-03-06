@@ -211,3 +211,5 @@ secrets
 .env
 working notebooks/
 notebooks/
+.DS_Store
+notebooks/02_preprocessing.ipynb
