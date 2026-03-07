@@ -1,0 +1,56 @@
+name: covered_call_ml
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+
+  # Core Data Science
+  - numpy
+  - pandas
+  - scipy
+
+  # Visualization
+  - matplotlib
+  - seaborn
+  - plotly
+
+  # Machine Learning
+  - scikit-learn
+  - xgboost
+  - lightgbm
+
+  # Deep Learning
+  - pytorch
+  - torchvision
+  - torchaudio
+
+  # Time Series & Finance
+  - statsmodels
+  - ta-lib
+  - yfinance
+
+  # Data Handling
+  - requests
+  - python-dotenv
+  - tqdm
+
+  # Notebook Environment
+  - jupyter
+  - jupyterlab
+  - ipykernel
+
+  # Utilities
+  - pyyaml
+  - joblib
+  - pip
+
+  - pip:
+      - alpha_vantage
+      - pandas-datareader
+      - pyarrow
+      - optuna
+      - shap
+      - category-encoders
