@@ -212,4 +212,6 @@ secrets
 .env
 working notebooks/
 .DS_Store
+data/
+
 
