@@ -1,3 +1,5 @@
+-e .
 python-fasthtml
 MonsterUI
 nautilus_trader
+gunicorn

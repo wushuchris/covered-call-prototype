@@ -213,3 +213,8 @@ working notebooks/
 notebooks/
 .DS_Store
 notebooks/02_preprocessing.ipynb
+
+# Project-specific
+logs/
+cache/
+*.egg-link

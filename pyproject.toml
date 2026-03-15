@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "covered-call-prototype"
+version = "0.1.0"
+description = "ML-Driven Covered Call Optimization — AAI-590 Capstone"
+requires-python = ">=3.11"
+dependencies = [
+    "python-fasthtml",
+    "MonsterUI",
+    "fastapi",
+    "uvicorn",
+    "aiohttp",
+    "pydantic",
+    "nautilus_trader",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

@@ -5,11 +5,11 @@
 
 ---
 
-## Current State (as of 2026-03-07)
+## Current State (as of 2026-03-15)
 
 ### Timeline Position
-- **Week 2** (March 1-7): Project Architecture & Pipeline Design
-- Week 3 starts March 8: Data Cleaning & EDA
+- **Week 4** (March 15-21): Feature Engineering & Label Construction
+- Carlos & Fatimat are primary contributors this week
 
 ### What Exists
 | Component | Status | Owner | Notes |
@@ -21,9 +21,21 @@
 | Feature inventory | Done | Christopher | `persistence_agent/feature_inventory.xlsx` — 48 engineered features defined |
 | Environment spec | Done | — | `environment.yaml` (conda) + `requirements-dev.txt` (pip) |
 | Project management plan | Done | Team | `persistence_agent/AAI-590-G6 Project Management Plan.docx` |
+| Project-wide utils | Done | Carlos | `src/utils.py` — logger, log_call decorator, shared ServiceRequest model |
+| UI service (FastHTML) | Done | Carlos | `src/ui/` — launcher, trading screen, inference sidebar, backtesting dashboard, docs |
+| Inference service (FastAPI) | Done | Carlos | `src/inference/` — daily inference, backtesting, strategy scaffold |
+| Main launcher | Done | Carlos | `main.py` — spawns UI (8008) + inference (8009) as Popen processes |
+| Python package structure | Done | Carlos | `__init__.py` files + `pyproject.toml` — `pip install -e .`, no sys.path hacks |
+| USD branding | Done | Carlos | Local fonts (Sofia Sans EC, Spectral), Founders/Immaculata/Torero Blue, logo PNG |
+| Systemd deployment | Done | Carlos | `deploy/setup_services.sh` — gunicorn + uvicorn workers, auto-start on boot |
 
 ### What's Next (Carlos's Queue)
 - [x] Submit Kosmos query for feature/label engineering exploration — RUNNING
+- [x] Build prototype microservices (UI + inference) — pseudocode → working code
+- [x] Convert to proper Python packages (`__init__.py` + `pyproject.toml`)
+- [x] USD branding (local fonts, brand colors, logo)
+- [x] Systemd deployment script (gunicorn + uvicorn workers)
+- [x] Add USD logo to `src/ui/static/`
 - [ ] Review Kosmos results when complete (~12 hrs)
 - [ ] Present Idea 1 (contract-level dataset) + Kosmos findings to team for decision
 - [ ] Build feature engineering pipeline (from raw parquets to modeling dataset)
@@ -31,7 +43,8 @@
 - [ ] Label construction (pending team decision + Kosmos results)
 - [ ] EDA notebook for data quality and feature distributions
 - [ ] Baseline model pipeline (Random Forest, then MLP, then Transformer)
-- [ ] Backtesting simulation framework
+- [ ] Wire NautilusTrader engine into backtesting.py (venue, instruments, data loading)
+- [ ] Plotly/ApexChart integration for candlestick chart in inference results panel
 
 ---
 
@@ -97,6 +110,58 @@
   - Query asks for: literature review on ML for covered calls/options, label transformation exploration, data quality filters, feature importance, regime stability
   - Query text saved at `persistence_agent/kosmos_query.md`
 - **Next session priority**: Review Kosmos results, present findings + Idea 1 to team, begin feature engineering pipeline
+
+### 2026-03-15 — Session 2: Pseudocode → Working Microservices
+
+Turned all pseudocode specs under `src/` into working implementations. Original spec comments preserved above each function for team accountability.
+
+**Built:**
+- `src/utils.py` — `create_logger()` (console=ERROR, file=INFO, auto-cleanup >1 day), `log_call()` decorator (async-aware, logs name/file/duration), `ServiceRequest` Pydantic BaseModel (shared inter-service data structure)
+- `src/ui/ui_utils.py` — `pack_request()`, `send_to_inference()` (async aiohttp POST to port 8009)
+- `src/ui/ui_components.py` — launcher screen, trading screen (NavBar + daily inference + backtesting dashboards + docs footer), docs screen (Nymo-inspired sidebar + content layout). Uses proper MonsterUI API: `NavBar`, `Grid`, `Card(header=...)`, `Loading`, `Toast`, `TableFromDicts`, `Container`, `TextPresets`, `CheckboxX`, `NavContainer`
+- `src/ui/ui_handler.py` — `handle_inference_call()` / `handle_backtest_call()` (pack → aiohttp POST → return)
+- `src/ui/app.py` — FastHTML on port 8008. Routes: `/` (launcher), `/trading`, `/clear`, `/inference_call` (POST), `/docs`
+- `src/inference/app.py` — FastAPI on port 8009. Routes: `/inference` (POST), `/backtest` (POST). Request body uses `ServiceRequest` Pydantic model (not raw dict)
+- `src/inference/inference_utils.py` — `unpack_request()`, `validate_ticker()`, `validate_date()`
+- `src/inference/strategy.py` — Placeholder functions (`random_bucket_strategy`, `baseline_strategy`, `simulate_inference`) + NautilusTrader `CoveredCallStrategy(Strategy)` scaffold with `on_start`, `on_bar`, `on_stop`
+- `src/inference/backtesting.py` — Cache-first pattern (load/save JSON), placeholder report, `_build_engine()` NautilusTrader scaffold with production TODOs
+- `src/inference/daily.py` — `run_daily_inference()` (validate → simulate)
+- `main.py` — Popen launcher for both services, graceful Ctrl+C shutdown
+
+**Sanity checks & fixes:**
+- Read MonsterUI docs (llms.txt, llms-ctx.txt, dashboard source, API ref) — fixed `NavBarContainer` (doesn't exist) → `NavBar`, raw `uk-grid` → `Grid`, raw spinner → `Loading`, manual table → `TableFromDicts`, raw classes → `TextPresets`/`TextT`
+- Read FastHTML docs (llms-ctx.txt, handler ref) — confirmed route param mapping, `serve()` usage
+- Read FastAPI docs — fixed `body: dict` (won't parse as JSON body) → `body: ServiceRequest` (Pydantic BaseModel)
+- Read NautilusTrader docs (getting started, strategy concepts, backtest low/high level) — scaffolded `CoveredCallStrategy(Strategy)` with proper lifecycle hooks, `BacktestEngine` setup in backtesting.py
+- Eliminated cross-service import (inference was importing from ui) — moved `ServiceRequest` to shared `utils.py`
+- Fixed relative cache path in backtesting.py → absolute via `Path(__file__).resolve()`
+
+**Data flow:**
+```
+User sidebar → @rt POST → ui_handler.pack_request() → aiohttp POST (model_dump())
+    → FastAPI parses ServiceRequest body → inference_utils.unpack_request()
+    → daily.run_daily_inference() / backtesting.run_backtest()
+    → JSON response → ui_handler → inference_results_card() → hx-swap into DOM
+```
+
+**Session 2 continued — packaging, branding, deployment:**
+
+- Converted flat `src/` to proper Python packages: added `__init__.py` to `src/`, `src/ui/`, `src/inference/`; created `pyproject.toml` with runtime deps; all imports now `from src.xxx`; removed all `sys.path.insert` hacks; `pip install -e .` makes everything resolve
+- Requirements coexistence: `pyproject.toml` (package + runtime deps), `carlos-reqs.txt` (Pi-light, includes `-e .`), `requirements-dev.txt` (team EDA/notebooks)
+- Downloaded USD brand fonts locally (Sofia Sans Extra Condensed 600, Spectral 400/600) to `src/ui/static/fonts/` — no Google Fonts API calls, works offline
+- Wired USD brand colors: Founders Blue `#003b70` (headings, navbar), Immaculata Blue `#0074c8` (buttons, links, accents), Torero Blue `#75bee9` (chart borders, subtle gradients)
+- Downloaded USD logo PNG to `src/ui/static/usd_logo.png`
+- Replaced JS checkbox with pure htmx (`hx_get="/today_date"` → server returns pre-filled date input)
+- Added Validex Growth Investors branding to launcher and navbar
+- Added `UkIcon("brain-circuit")` to navbar brand
+- Docs screen: added "Back to Trader" link with `UkIcon("arrow-left")`
+- Fixed `static_path` — FastHTML serves from `{static_path}/{url_path}`, so pointed to `src/ui/` dir (not `src/ui/static/`)
+- Fixed full-width layout — removed `Container(ContainerT.xl)` cap, added CSS override for `.uk-container`/`.uk-section` max-width
+- Results panel now always shows table structure with blank `—` values on load; Compute Inference swaps in real data
+- Table and chart placeholder render side by side (flex 2:3 ratio)
+- Created `deploy/setup_services.sh` — systemd units for gunicorn + uvicorn workers (2 workers each, `Type=simple`, bound to `0.0.0.0:8008`/`127.0.0.1:8009`, `PYTHONPATH` set, auto-restart on failure)
+
+**Next session priority**: Review Kosmos results, wire real data into NautilusTrader engine, add candlestick chart (ApexChart/Plotly) to inference panel
 
 ---
 
@@ -169,11 +234,55 @@ Train/val/test split (temporal) → model training
 Backtest simulation → performance vs baseline
 ```
 
+### Service Architecture
+```
+Production (systemd):
+    covered-call-ui.service        — gunicorn + uvicorn workers → src.ui.app:app :8008
+    covered-call-inference.service — gunicorn + uvicorn workers → src.inference.app:app :8009
+    nginx reverse proxy            — :80/:443 → :8008
+
+Development:
+    python main.py                 — Popen launcher for both services
+
+src/ (Python package, pip install -e .)
+    ├── __init__.py
+    ├── utils.py               — logger, log_call decorator, ServiceRequest model
+    ├── ui/
+    │   ├── __init__.py
+    │   ├── app.py             — FastHTML :8008 (routes, USD branding, local fonts)
+    │   ├── ui_components.py   — MonsterUI component tree (Validex branding)
+    │   ├── ui_handler.py      — aiohttp bridge to inference service
+    │   ├── ui_utils.py        — pack_request, send_to_inference
+    │   └── static/
+    │       ├── usd_logo.png
+    │       └── fonts/         — Sofia Sans EC 600, Spectral 400/600
+    └── inference/
+        ├── __init__.py
+        ├── app.py             — FastAPI :8009 (inference, backtesting)
+        ├── daily.py           — single-day paper-trade inference
+        ├── backtesting.py     — NautilusTrader backtest engine (scaffold)
+        ├── strategy.py        — CoveredCallStrategy + placeholder functions
+        └── inference_utils.py — validation, data integrity
+```
+
 ### Key File Paths
 ```
+pyproject.toml                        — package definition + runtime deps
+carlos-reqs.txt                       — Pi-light requirements (includes -e .)
+main.py                               — dev launcher (Popen, both services)
+deploy/setup_services.sh              — systemd unit setup script (gunicorn)
+src/utils.py                          — project-wide utilities + shared ServiceRequest
+src/ui/app.py                         — FastHTML server (port 8008)
+src/ui/ui_components.py               — all UI components (MonsterUI + USD branding)
+src/ui/ui_handler.py                  — inter-service communication handler
+src/ui/ui_utils.py                    — request packing, async transport
+src/ui/static/                        — logo, fonts (served locally, no API calls)
+src/inference/app.py                  — FastAPI server (port 8009)
+src/inference/strategy.py             — NautilusTrader strategy + placeholders
+src/inference/backtesting.py          — backtest engine scaffold + caching
+src/inference/daily.py                — daily inference pipeline
+src/inference/inference_utils.py      — input validation
+persistence_agent/                    — team docs, feature inventory, project plans, grounding
 notebooks/01_data_pull.ipynb          — data ingestion (done)
 data_scripts/data_dwnld.py           — S3 quick-download (done)
-persistence_agent/feature_inventory.xlsx — feature definitions (reference)
-environment.yaml                      — conda environment spec
-requirements-dev.txt                  — pip requirements
 ```

@@ -1,0 +1,2 @@
+# to reload after changes just
+sudo systemctl restart covered-call-ui                                        
