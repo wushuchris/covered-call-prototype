@@ -1,0 +1,2 @@
+# as the name implies we want to be able to test (paper trading) the strategy on a given day (today, but that info comes from the user)
+# we don't actually connect to an exchange, just run the strategy and return our results
