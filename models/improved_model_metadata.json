@@ -1,0 +1,76 @@
+{
+  "feature_cols": [
+    "vol_21d",
+    "vol_63d",
+    "mom_5d",
+    "mom_21d",
+    "mom_63d",
+    "price_to_sma21",
+    "price_to_sma200",
+    "sma21_above_sma50",
+    "sma50_above_sma200",
+    "drawdown_63d",
+    "drawdown_252d",
+    "volume_ratio",
+    "high_vol_regime",
+    "gross_margin",
+    "net_margin",
+    "revenue_growth_yoy",
+    "earnings_growth_yoy",
+    "debt_to_equity",
+    "cash_ratio",
+    "roe",
+    "roa",
+    "pe_ratio",
+    "ps_ratio",
+    "ev_ebitda",
+    "fcf_yield"
+  ],
+  "label_map_6": {
+    "ATM_SHORT": 0,
+    "ATM_LONG": 1,
+    "OTM5_SHORT": 2,
+    "OTM5_LONG": 3,
+    "OTM10_SHORT": 4,
+    "OTM10_LONG": 5
+  },
+  "moneyness_map": {
+    "ATM": 0,
+    "OTM5": 1,
+    "OTM10": 2
+  },
+  "maturity_map": {
+    "SHORT": 0,
+    "LONG": 1
+  },
+  "best_model": "Two-Stage",
+  "best_rf_params": {
+    "n_estimators": 500,
+    "max_depth": 13,
+    "min_samples_split": 10,
+    "min_samples_leaf": 1,
+    "max_features": "log2"
+  },
+  "best_xgb_params": {
+    "n_estimators": 478,
+    "max_depth": 8,
+    "learning_rate": 0.028477486830279893,
+    "subsample": 0.972916136764715,
+    "colsample_bytree": 0.7606700059313507,
+    "min_child_weight": 7,
+    "gamma": 0.0757211855137844,
+    "reg_alpha": 0.004077450220493045,
+    "reg_lambda": 0.00136436567228164
+  },
+  "best_lgbm_params": {
+    "n_estimators": 488,
+    "max_depth": 12,
+    "learning_rate": 0.0291646147298636,
+    "num_leaves": 83,
+    "subsample": 0.8473393958852318,
+    "colsample_bytree": 0.65899058467598,
+    "min_child_samples": 23,
+    "reg_alpha": 9.988144543678507e-07,
+    "reg_lambda": 0.04638828057931174
+  }
+}
