@@ -43,34 +43,36 @@
     "SHORT": 0,
     "LONG": 1
   },
-  "best_model": "Two-Stage",
+  "split_date": "2022-06-30",
+  "best_model": "RF_tuned",
   "best_rf_params": {
-    "n_estimators": 500,
+    "n_estimators": 234,
     "max_depth": 13,
     "min_samples_split": 10,
-    "min_samples_leaf": 1,
-    "max_features": "log2"
+    "min_samples_leaf": 8,
+    "max_features": "sqrt"
   },
   "best_xgb_params": {
-    "n_estimators": 478,
-    "max_depth": 8,
-    "learning_rate": 0.028477486830279893,
-    "subsample": 0.972916136764715,
-    "colsample_bytree": 0.7606700059313507,
-    "min_child_weight": 7,
-    "gamma": 0.0757211855137844,
-    "reg_alpha": 0.004077450220493045,
-    "reg_lambda": 0.00136436567228164
+    "n_estimators": 178,
+    "max_depth": 10,
+    "learning_rate": 0.16145633711303542,
+    "subsample": 0.8884170683398009,
+    "colsample_bytree": 0.7343526094439211,
+    "min_child_weight": 3,
+    "gamma": 0.6487809737516287,
+    "reg_alpha": 0.0006505761836305459,
+    "reg_lambda": 0.003910440683568462
   },
   "best_lgbm_params": {
-    "n_estimators": 488,
-    "max_depth": 12,
-    "learning_rate": 0.0291646147298636,
-    "num_leaves": 83,
-    "subsample": 0.8473393958852318,
-    "colsample_bytree": 0.65899058467598,
-    "min_child_samples": 23,
-    "reg_alpha": 9.988144543678507e-07,
-    "reg_lambda": 0.04638828057931174
-  }
+    "n_estimators": 306,
+    "max_depth": 8,
+    "learning_rate": 0.011711509955524094,
+    "num_leaves": 67,
+    "subsample": 0.6682096494749166,
+    "colsample_bytree": 0.5325257964926398,
+    "min_child_samples": 48,
+    "reg_alpha": 4.905556676028766,
+    "reg_lambda": 0.1886149587855396
+  },
+  "approach": "time-based split, class weights (no SMOTE)"
 }
