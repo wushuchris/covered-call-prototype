@@ -24,55 +24,24 @@
     "pe_ratio",
     "ps_ratio",
     "ev_ebitda",
-    "fcf_yield"
+    "fcf_yield",
+    "iv_mean",
+    "iv_median",
+    "iv_skew",
+    "iv_short_mean",
+    "iv_short_std",
+    "iv_long_mean",
+    "iv_term_structure",
+    "iv_rank",
+    "iv_change"
   ],
-  "label_map_6": {
-    "ATM_SHORT": 0,
-    "ATM_LONG": 1,
-    "OTM5_SHORT": 2,
-    "OTM5_LONG": 3,
-    "OTM10_SHORT": 4,
-    "OTM10_LONG": 5
-  },
   "moneyness_map": {
     "ATM": 0,
     "OTM5": 1,
     "OTM10": 2
   },
-  "maturity_map": {
-    "SHORT": 0,
-    "LONG": 1
-  },
-  "split_date": "2022-06-30",
-  "best_model": "RF_tuned",
-  "best_rf_params": {
-    "n_estimators": 234,
-    "max_depth": 13,
-    "min_samples_split": 10,
-    "min_samples_leaf": 8,
-    "max_features": "sqrt"
-  },
-  "best_xgb_params": {
-    "n_estimators": 178,
-    "max_depth": 10,
-    "learning_rate": 0.16145633711303542,
-    "subsample": 0.8884170683398009,
-    "colsample_bytree": 0.7343526094439211,
-    "min_child_weight": 3,
-    "gamma": 0.6487809737516287,
-    "reg_alpha": 0.0006505761836305459,
-    "reg_lambda": 0.003910440683568462
-  },
-  "best_lgbm_params": {
-    "n_estimators": 306,
-    "max_depth": 8,
-    "learning_rate": 0.011711509955524094,
-    "num_leaves": 67,
-    "subsample": 0.6682096494749166,
-    "colsample_bytree": 0.5325257964926398,
-    "min_child_samples": 48,
-    "reg_alpha": 4.905556676028766,
-    "reg_lambda": 0.1886149587855396
-  },
-  "approach": "time-based split, class weights (no SMOTE)"
+  "maturity_rule": "SHORT if iv_rank > 0.5 else LONG",
+  "approach": "walk-forward, class weights, IV features, 3-class moneyness",
+  "walk_forward_f1": 0.47357772198647846,
+  "walk_forward_acc": 0.53839590443686
 }

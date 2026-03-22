@@ -213,3 +213,4 @@ working notebooks/
 
 .DS_Store
 notebooks/02_preprocessing.ipynb
+.claude/
