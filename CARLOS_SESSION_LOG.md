@@ -163,6 +163,55 @@ User sidebar → @rt POST → ui_handler.pack_request() → aiohttp POST (model_
 
 **Next session priority**: Review Kosmos results, wire real data into NautilusTrader engine, add candlestick chart (ApexChart/Plotly) to inference panel
 
+### 2026-03-24/25 — Session 3: Model Integration, Candlestick Charts, Documentation
+
+Picked up from a crashed session (computer turned off). Restored services, installed missing deps, wired the real LGBM model into the inference pipeline, added candlestick charts, built the full documentation site.
+
+**Infrastructure fixes:**
+- Installed `joblib`, `lightgbm`, `scikit-learn` (minimal ML deps — avoided the full `requirements-dev.txt` which crashed the Pi)
+- Ran `data_scripts/build_processed.py` to generate `data/processed/` from S3 (1,391 rows, 9 classes, 10 tickers)
+- Fixed inference service crash-loop caused by missing `joblib` import
+
+**Model integration (new files):**
+- `src/inference/model.py` — loads `lgbm_3class_moneyness.joblib`, builds a precomputed feature store from `modeling_data.parquet` + `options_clean.parquet` (IV features), runs predictions on all rows at startup. `predict_bucket(ticker, date)` is an instant row lookup.
+- `src/inference/chart.py` — loads `daily_clean.parquet`, returns OHLC data (trailing month, ~23 candles) as list of dicts for ApexCharts
+- `src/inference/strategy.py` — rewritten to delegate to `model.predict_bucket()` as single source of truth for both UI and NautilusTrader
+- `src/inference/daily.py` — wired to call `simulate_inference()` + `build_candlestick_data()`
+
+**Model behavior:**
+- Exact month match first, then snaps to nearest available month if data is sparse (with `snapped: true` flag)
+- UI shows a toast warning when snapping occurs
+- Removed ground truth fields (best_bucket, best_return) from daily inference display — those belong in backtesting dashboards
+- Added "LGBM 3-Class Moneyness" model name to results table
+
+**Candlestick chart (ApexCharts, no JS):**
+- Initially tried Plotly `to_html()` + `NotStr()` — htmx wouldn't execute the `<script>` tags
+- Researched alternatives: `fh-plotly` pattern, kaleido SVG (segfaults on aarch64), matplotlib
+- Final solution: MonsterUI's built-in `ApexChart` component with `apex_charts=True` in theme headers. `<uk-chart>` custom element self-initializes on htmx swap — zero JS authoring
+- OHLC data returned as JSON from inference service, rendered as candlestick by UI component
+- Limited to trailing month (~23 trading days) to keep browser responsive
+
+**UI changes:**
+- Renamed "Daily Inference" → "Historical Inference" (section heading + navbar)
+- Updated ticker list to match actual universe (AAPL, AMZN, AVGO, GOOG, GOOGL, META, MSFT, NVDA, TSLA, WMT)
+- Results table: Ticker, Date, Month, Model, Prediction, Confidence, Baseline, Sample
+- Snap warning toast with `z-index:9999` to render above other components
+
+**Documentation site (`/docs`):**
+- Built full documentation from notebook markdown cells (01-07) and `reports/figures/` (21 PNGs)
+- 6 sections: Overview, Data Pipeline, Exploratory Analysis, Feature Engineering, Models, Results
+- Overview + Data Pipeline: full-width text + card layout
+- Other sections: two-column layout — text left, modal trigger right (Lucide `search` icon opens full-size image in `Modal`)
+- Horizontal divider between each row for visual clarity
+- Scrollspy navbar with section anchors + "Trader" link back to trading screen
+- Figures served via `Starlette Mount` at `/figures/` (route inserted at position 0 in `app.routes`) — no symlinks, portable across clones
+
+**Logger fix:**
+- Applied `@log_call(logger)` decorator to all UI routes — logger was empty because no routes were decorated
+- Now logs timestamp, route, file, and execution time for every request
+
+**Next session priority**: Backtesting dashboards (ground truth metrics belong there), NautilusTrader engine wiring, Kosmos results review
+
 ---
 
 ## Proposed Dataset Redesign (TEAM DECISION REQUIRED)

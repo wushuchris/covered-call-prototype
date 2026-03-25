@@ -22,7 +22,7 @@ from fasthtml.common import *
 from monsterui.all import *
 from src.ui.ui_components import launcher_screen, trading_screen, inference_results_card, docs_screen
 from src.ui.ui_handler import handle_inference_call
-from src.utils import create_logger
+from src.utils import create_logger, log_call
 
 logger = create_logger("ui")
 
@@ -55,7 +55,13 @@ usd_brand_css = Style("""
 """)
 
 import os as _os
+from pathlib import Path as _Path
+from starlette.staticfiles import StaticFiles
+from starlette.routing import Mount
+
 _UI_DIR = _os.path.dirname(_os.path.abspath(__file__))
+_PROJECT_ROOT = _Path(__file__).resolve().parent.parent.parent
+_FIGURES_DIR = _PROJECT_ROOT / "reports" / "figures"
 
 app, rt = fast_app(
     pico=False,
@@ -66,10 +72,15 @@ app, rt = fast_app(
     static_path=_UI_DIR,
 )
 
+# Serve reports/figures at /figures/ — mounted before catch-all, no symlinks, portable across clones
+if _FIGURES_DIR.exists():
+    app.routes.insert(0, Mount("/figures", app=StaticFiles(directory=str(_FIGURES_DIR))))
+
 
 # a @rt for project root/index, should serve a launching screen, minimalistic, USD colors and .svg logo centered, with a continue button
 # that sends you to the actual SPA-esque screen (not actually a SIngle Page Application in the traditional sense)
 @rt("/")
+@log_call(logger)
 def get():
     """Serve the launcher screen."""
     try:
@@ -81,6 +92,7 @@ def get():
 
 # @rt loads the actual trading system screen, which is a ui_components function (that is a collection of components)
 @rt("/trading")
+@log_call(logger)
 def get():
     """Serve the trading system screen."""
     try:
@@ -114,6 +126,7 @@ def get():
 
 # @ rt that handles user input, at first it should remove all html and return a plain hello world (testing boiler plate)
 @rt("/inference_call")
+@log_call(logger)
 async def post(date: str = "", ticker: str = ""):
     """Handle inference call from the sidebar form.
 
@@ -131,6 +144,7 @@ async def post(date: str = "", ticker: str = ""):
 
 
 @rt("/docs")
+@log_call(logger)
 def get():
     """Serve the documentation screen."""
     try:
