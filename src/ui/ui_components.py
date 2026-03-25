@@ -298,9 +298,12 @@ def inference_results_card(data: dict):
         # Warn if month was snapped to nearest available
         snap_warning = None
         if data.get("snapped"):
-            snap_warning = Toast(
-                f"No data for requested month — showing nearest available: {data.get('month', '?')}",
-                cls=ToastHT.end, alert_cls=AlertT.warning, dur=5.0,
+            snap_warning = Div(
+                Toast(
+                    f"No data for requested month — showing nearest available: {data.get('month', '?')}",
+                    cls=ToastHT.end, alert_cls=AlertT.warning, dur=5.0,
+                ),
+                style="position:relative; z-index:9999;",
             )
 
         return Div(
