@@ -15,7 +15,7 @@ from fasthtml.common import *
 import fasthtml.common as fh
 from monsterui.all import *
 
-TICKERS = ["ADMA", "NTRA", "AXON", "SHAK", "AAPL", "MSFT", "NVDA", "AMZN", "GOOG", "META"]
+TICKERS = ["AAPL", "AMZN", "AVGO", "GOOG", "GOOGL", "META", "MSFT", "NVDA", "TSLA", "WMT"]
 
 # USD brand colors as inline styles (used where MonsterUI theme doesn't reach)
 _FOUNDERS = "#003b70"
@@ -225,11 +225,12 @@ def _inference_results_panel():
     """
     # show the same layout as computed results, but with blank values
     blank_data = {
-        "ticker": "—", "date": "—", "prediction": "—",
-        "baseline": "—", "sharpe": "—", "expected_return": "—", "status": "awaiting input",
+        "Ticker": "—", "Date": "—", "Month": "—", "Model": "—",
+        "Prediction": "—", "Confidence": "—",
+        "Baseline": "—", "Sample": "—",
     }
     header = ["Metric", "Value"]
-    body = [{"Metric": k, "Value": str(v)} for k, v in blank_data.items()]
+    body = [{"Metric": k, "Value": v} for k, v in blank_data.items()]
     return Div(
         Card(
             Div(
@@ -253,34 +254,74 @@ def _inference_results_panel():
 
 
 def inference_results_card(data: dict):
-    """Render inference results as a stats table.
+    """Render inference results as a stats table + candlestick chart.
+
+    The chart data comes as OHLC dicts from the inference service and
+    is rendered via MonsterUI's ApexChart component (candlestick type).
 
     Args:
-        data: Dict with keys like ticker, date, prediction, sharpe, etc.
+        data: Dict with model prediction fields and chart_data.
 
     Returns:
-        Card Div with a table of results.
+        Card Div with results table and candlestick chart.
     """
     try:
+        # Daily inference display — only model output, no ground truth
+        display = {
+            "Ticker": data.get("ticker", "—"),
+            "Date": data.get("date", "—"),
+            "Month": data.get("month", "—"),
+            "Model": "LGBM 3-Class Moneyness",
+            "Prediction": data.get("model_bucket", "—"),
+            "Confidence": f"{data.get('model_confidence', 0):.1%}",
+            "Baseline": data.get("baseline", "—"),
+            "Sample": data.get("sample_type", "—"),
+        }
         header = ["Metric", "Value"]
-        body = [{"Metric": k, "Value": str(v)} for k, v in data.items()]
-        return Card(
-            Div(
-                # table side — left ~40%
+        body = [{"Metric": k, "Value": v} for k, v in display.items()]
+
+        # OHLC data from inference service → ApexCharts candlestick
+        chart_data = data.get("chart_data", [])
+        if chart_data:
+            chart_el = ApexChart(opts={
+                "chart": {"type": "candlestick", "height": 320},
+                "series": [{"name": "Price", "data": chart_data}],
+                "xaxis": {"type": "datetime"},
+                "yaxis": {"tooltip": {"enabled": True}},
+                "plotOptions": {"candlestick": {
+                    "colors": {"upward": _IMMACULATA, "downward": _FOUNDERS},
+                }},
+            })
+        else:
+            chart_el = P("No chart data available.", cls=TextPresets.muted_sm)
+
+        # Warn if month was snapped to nearest available
+        snap_warning = None
+        if data.get("snapped"):
+            snap_warning = Toast(
+                f"No data for requested month — showing nearest available: {data.get('month', '?')}",
+                cls=ToastHT.end, alert_cls=AlertT.warning, dur=5.0,
+            )
+
+        return Div(
+            snap_warning if snap_warning else "",
+            Card(
                 Div(
-                    TableFromDicts(header_data=header, body_data=body),
-                    style="flex:2;",
+                    # table side — left ~40%
+                    Div(
+                        TableFromDicts(header_data=header, body_data=body),
+                        style="flex:2;",
+                    ),
+                    # chart side — right ~60%, rendered via ApexChart component
+                    Div(
+                        chart_el,
+                        style="flex:3; min-height:200px;",
+                    ),
+                    style="display:flex; gap:1rem;",
                 ),
-                # chart placeholder — right ~60%, will be ApexChart or Plotly in production
-                Div(
-                    P("Candlestick chart will render here.", cls=TextPresets.muted_sm),
-                    style=f"flex:3; min-height:200px; border:1px dashed {_TORERO}; border-radius:8px; "
-                          "display:flex; align-items:center; justify-content:center;",
-                ),
-                style="display:flex; gap:1rem;",
+                header=H4(f"Inference — {data.get('ticker', '?')} @ {data.get('date', '?')}",
+                           style=f"color:{_FOUNDERS};"),
             ),
-            header=H4(f"Inference — {data.get('ticker', '?')} @ {data.get('date', '?')}",
-                       style=f"color:{_FOUNDERS};"),
         )
     except Exception:
         return _fallback("inference results")

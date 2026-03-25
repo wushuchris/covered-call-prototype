@@ -60,7 +60,7 @@ _UI_DIR = _os.path.dirname(_os.path.abspath(__file__))
 app, rt = fast_app(
     pico=False,
     hdrs=(
-        *Theme.blue.headers(),
+        *Theme.blue.headers(apex_charts=True),
         usd_brand_css,
     ),
     static_path=_UI_DIR,
