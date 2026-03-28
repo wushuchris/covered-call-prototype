@@ -209,8 +209,8 @@ marimo/_lsp/
 __marimo__/
 secrets
 .env
-working notebooks/
-
 .DS_Store
-notebooks/02_preprocessing.ipynb
-.claude/
+working notebooks/
+data/
+eda_plots/
+
