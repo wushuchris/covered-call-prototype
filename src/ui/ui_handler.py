@@ -43,17 +43,23 @@ async def handle_inference_call(ticker: str, date: str) -> dict:
         return {"error": f"Inference call failed: {e}"}
 
 
-async def handle_backtest_call() -> dict:
+async def handle_backtest_call(year: str = "all",
+                               budget: float = 100_000) -> dict:
     """Handle a backtesting request from the UI.
 
-    Sends a request to the FastAPI backtesting endpoint and
-    returns the response dict for rendering.
+    Packs year and budget into a ServiceRequest and sends it
+    to the FastAPI inference service's /backtest endpoint.
+    Returns all 3 presets + baseline in one response.
+
+    Args:
+        year: Year filter ('all' or e.g. '2020').
+        budget: Dollar budget per month.
 
     Returns:
-        Dict with backtest results or error info.
+        Dict with backtest results for all presets or error info.
     """
     try:
-        req = ServiceRequest(data={}, params={"mode": "backtest"})
+        req = pack_request(ticker="", date="", year=year, budget=budget)
         async with aiohttp.ClientSession() as session:
             result = await send_to_inference(session, req, "/backtest")
         return result

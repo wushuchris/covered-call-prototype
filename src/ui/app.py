@@ -20,8 +20,9 @@ from datetime import date
 
 from fasthtml.common import *
 from monsterui.all import *
-from src.ui.ui_components import launcher_screen, trading_screen, inference_results_card, docs_screen
-from src.ui.ui_handler import handle_inference_call
+from src.ui.ui_components import launcher_screen, trading_screen, inference_results_card, backtest_results_card, docs_screen
+from src.ui.ui_handler import handle_inference_call, handle_backtest_call
+
 from src.utils import create_logger, log_call
 
 logger = create_logger("ui")
@@ -141,6 +142,24 @@ async def post(date: str = "", ticker: str = ""):
     except Exception as e:
         logger.error(f"Error on inference_call: {e}")
         return Div(P("Inference request failed.", cls="uk-text-danger"))
+
+
+@rt("/backtest_call")
+@log_call(logger)
+async def post(year: str = "all", budget: str = "100000"):
+    """Handle backtest request from the backtesting sidebar.
+
+    Runs backtests for all 3 presets + baseline for the selected year.
+    """
+    try:
+        budget_val = float(budget)
+        result = await handle_backtest_call(year=year, budget=budget_val)
+        if "error" in result:
+            return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
+        return backtest_results_card(result)
+    except Exception as e:
+        logger.error(f"Error on backtest_call: {e}")
+        return Div(P("Backtest request failed.", cls="uk-text-danger"))
 
 
 @rt("/docs")

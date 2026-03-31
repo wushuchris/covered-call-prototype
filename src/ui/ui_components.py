@@ -341,47 +341,139 @@ def inference_results_card(data: dict):
 # (what calls the system made the most, etc), baseline statistics in terms of the EDA
 
 def _backtesting_section():
-    """Backtesting dashboards placeholder.
+    """Backtesting dashboards: preset selector + results panel.
 
-    Four subsections: overall performance, per-stock, baseline stats, EDA stats.
+    Preset dropdown triggers a POST to /backtest_call which returns
+    strategy vs baseline metrics rendered via backtest_results_card().
 
     Returns:
         Section Div.
     """
     return Section(
         H3("Backtesting Dashboards", style=f"color:{_FOUNDERS};"),
-        P("Historical strategy performance and analytics.", cls=TextPresets.muted_sm),
+        P("Historical strategy performance vs. OTM10 baseline.", cls=TextPresets.muted_sm),
         DividerLine(),
         Grid(
-            _dashboard_card("Overall Performance",
-                            "System-wide profit & risk metrics."),
-            _dashboard_card("Per-Stock Performance",
-                            "Select a ticker to view individual results."),
-            _dashboard_card("Baseline Statistics",
-                            "Most frequent calls, assignment rates."),
-            _dashboard_card("EDA Overview",
-                            "Feature distributions and data quality."),
-            cols_min=1, cols_md=2, cols_max=2,
+            # Results panel — left (spans 4 of 7 cols)
+            Div(_backtest_results_panel(), cls="col-span-4"),
+            # Sidebar — right (spans 3 of 7 cols)
+            Div(_backtest_sidebar(), cls="col-span-3"),
+            cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
         ),
         id="backtesting",
     )
 
 
-def _dashboard_card(title: str, description: str):
-    """Individual dashboard placeholder card.
-
-    Args:
-        title: Card heading.
-        description: Short description.
+def _backtest_sidebar():
+    """Sidebar with year dropdown, budget input, and run button.
 
     Returns:
-        Card with styled header.
+        Card with backtest controls.
     """
+    year_options = [fh.Option("All Years", value="all", selected=True)] + [
+        fh.Option(str(y), value=str(y)) for y in range(2008, 2026)
+    ]
     return Card(
-        P(description, cls=TextPresets.muted_sm),
-        P("Coming soon.", cls=(TextT.sm, TextT.italic)),
-        header=H4(title, style=f"color:{_IMMACULATA};"),
+        # Year dropdown (native select — MonsterUI uk-select doesn't reliably show selected on load)
+        Label("Time Window"),
+        fh.Select(*year_options, name="year", id="backtest-year", cls="uk-select"),
+        # Budget input
+        Label("Budget ($)", cls="mt-3"),
+        Input(type="number", name="budget", id="backtest-budget",
+              value="100000", min="10000", step="10000"),
+        # Run button
+        Button("Run Backtest",
+               cls="w-full mt-4",
+               style=f"background-color:{_IMMACULATA}; color:white;",
+               hx_post="/backtest_call",
+               hx_include="#backtest-year, #backtest-budget",
+               hx_target="#backtest-results",
+               hx_swap="innerHTML",
+               hx_indicator="#backtest-spinner"),
+        Loading(htmx_indicator=True, id="backtest-spinner"),
+        header=H4("Parameters", style=f"color:{_FOUNDERS};"),
     )
+
+
+def _backtest_results_panel():
+    """Placeholder panel where backtest results get swapped in.
+
+    Returns:
+        Div with id for hx-target.
+    """
+    return Div(
+        Card(
+            P("Select a preset and click Run Backtest.", cls=TextPresets.muted_sm),
+            header=H4("Backtest Results", style=f"color:{_FOUNDERS};"),
+        ),
+        id="backtest-results",
+    )
+
+
+def backtest_results_card(data: dict):
+    """Render backtest results: metrics table with Baseline + 3 presets as columns.
+
+    Args:
+        data: Combined backtest report from run_backtest_all().
+
+    Returns:
+        Div with comparison table.
+    """
+    try:
+        n_months = data.get("n_months", 0)
+        year = data.get("year", "all")
+        date_range = data.get("date_range", {})
+        bm = data["baseline"]["metrics"]
+        presets = data["presets"]
+
+        def fmt_pct(v):
+            return f"{v:.1%}"
+
+        def fmt_ratio(v):
+            return f"{v:.2f}"
+
+        # Build comparison table rows
+        metrics = [
+            ("Annualized Return", "annualized_return", fmt_pct, True),
+            ("Sharpe Ratio", "sharpe_ratio", fmt_ratio, True),
+            ("Max Drawdown", "max_drawdown", fmt_pct, False),
+            ("Hit Rate", "hit_rate", fmt_pct, True),
+            ("Avg P / Avg L", "avg_p_l", fmt_ratio, True),
+        ]
+
+        header = ["Metric", "Baseline", "Conservative", "Balanced", "Aggressive"]
+        rows = []
+        for label, key, fmt, higher_is_better in metrics:
+            baseline_val = bm[key]
+            row = {"Metric": label, "Baseline": fmt(baseline_val)}
+            for preset in ["conservative", "balanced", "aggressive"]:
+                val = presets[preset]["metrics"][key]
+                formatted = fmt(val)
+                # Color: green if strategy beats baseline, red if not
+                if higher_is_better:
+                    beats = val >= baseline_val
+                else:
+                    beats = val >= baseline_val  # For drawdown, less negative is better
+                color = "#2e7d32" if beats else "#c62828"
+                row[preset.title()] = formatted
+            rows.append(row)
+
+        period_label = f"Year: {year}" if year != "all" else "All Years"
+        period_detail = f"{date_range.get('start', '?')} to {date_range.get('end', '?')}"
+
+        return Div(
+            Card(
+                P(f"{period_label} ({period_detail}) | {n_months} months | Budget: ${data.get('budget', 0):,.0f}",
+                  cls=TextPresets.muted_sm),
+                P(f"Baseline: OTM10 all tickers, equal weight", cls=(TextT.sm, TextT.italic)),
+                DividerLine(),
+                TableFromDicts(header_data=header, body_data=rows),
+                header=H4("Strategy Comparison", style=f"color:{_FOUNDERS};"),
+            ),
+        )
+
+    except Exception:
+        return _fallback("backtest results")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -546,10 +638,11 @@ def _docs_eda():
             _doc_fig("bucket_analysis.png", "Delta/DTE distributions with bucket boundaries and per-ticker coverage."),
         ),
         _doc_row(
-            P("Target label distribution shows ATM_DTE60 as the most frequent best bucket (319 occurrences) "
-              "and OTM10_DTE90 as the least (65). This class imbalance is handled via inverse-frequency "
+            P("Best moneyness distribution by year and ticker. ATM dominates across all years and most tickers, "
+              "with OTM5 and OTM10 appearing more in volatile periods. WMT and MSFT skew heavily toward ATM; "
+              "NVDA and TSLA show more OTM diversity. Class imbalance is handled via inverse-frequency "
               "class weights during training."),
-            _doc_fig("label_distribution.png", "Label distribution — ATM_DTE60 most frequent, OTM10_DTE90 least."),
+            _doc_fig("label_distribution.png", "Best moneyness by year and by ticker — ATM dominates."),
         ),
         _doc_row(
             P("Best bucket shifts between volatility regimes — ATM dominates in both low and high vol, "
@@ -609,40 +702,47 @@ def _docs_models():
     """Section 5: Model architectures and progression."""
     return _doc_section("doc-models", "Models",
         # Baseline
+        # STALE figures from prior 9-class iteration (notebooks rewritten to 3-class):
+        #   _doc_fig("feature_importance_comparison.png", ...) — showed leaky adjusted_close/volume at top
+        #   _doc_fig("rf_confusion_matrix.png", ...) — 9-class RF confusion matrix
+        #   _doc_fig("xgb_confusion_matrix.png", ...) — 9-class XGB confusion matrix
+        #   _doc_fig("rf_feature_importance.png", ...) — 9-class RF feature importance (leaky features)
+        #   _doc_fig("xgb_feature_importance.png", ...) — 9-class XGB feature importance (leaky features)
+        # Replaced with 3-class equivalents: baseline_confusion.png, baseline_feature_importance.png
         _doc_row(
             Div(
-                H4("Baseline Models (9-Class)", style=f"color:{_IMMACULATA};"),
-                P("Random Forest and XGBoost trained on the full 9-class target with 80/20 "
-                  "stratified train/test split. 1,112 train / 279 test samples, 30 features, "
-                  "StandardScaler normalization, median imputation."),
-                P("RF: 37.3% accuracy / 0.358 macro F1. XGB: 38.7% / 0.356 macro F1. "
-                  "5-fold CV confirms: RF 0.373, XGB 0.370.", cls="mt-2"),
-                P("Both models lean heavily on adjusted_close and volume — price-level features "
-                  "that were later identified as leaky (encode ticker identity, not strategy signal).", cls="mt-2"),
+                H4("Baseline Models (3-Class)", style=f"color:{_IMMACULATA};"),
+                P("Random Forest and XGBoost trained on the 3-class moneyness target (ATM/OTM5/OTM10) "
+                  "with 80/20 time-based split on daily data. 21,395 train / 7,878 test rows, 27 features."),
+                P("RF: 48.5% accuracy / 0.333 macro F1. XGB: 48.0% / 0.359 macro F1. "
+                  "Both heavily favor predicting ATM (the majority class), with poor OTM5 recall.", cls="mt-2"),
+                P("Top features: debt_to_equity, cash_ratio, gross_margin, revenue_growth_yoy — "
+                  "fundamentals dominate after pruning leaky price-level features (adjusted_close, volume).", cls="mt-2"),
             ),
-            _doc_fig("feature_importance_comparison.png", "Baseline feature importance — price-level features dominate (later pruned)."),
+            _doc_fig("baseline_feature_importance.png", "Baseline feature importance — fundamentals dominate after pruning leaky features."),
+        ),
+        _doc_row(
+            P("Baseline confusion matrices show both models default to ATM predictions. "
+              "RF misclassifies 1,778 OTM10 samples as ATM; XGB does slightly better with 1,624. "
+              "OTM5 is the hardest class — only 45 correct predictions by RF, 198 by XGB."),
+            _doc_fig("baseline_confusion.png", "RF and XGB 3-class confusion matrices — ATM prediction bias."),
         ),
         # Improved
+        # STALE figures from prior 6-class iteration (notebooks rewritten to 3-class):
+        #   _doc_fig("old_vs_new_comparison.png", ...) — baseline vs 6-class comparison
+        #   _doc_fig("model_comparison.png", ...) — 6-class time-split comparison
+        # Removed: these 6-class models no longer exist in any notebook
         _doc_row(
             Div(
-                H4("Improved Models (6-Class, Time-Split)", style=f"color:{_IMMACULATA};"),
-                P("Key improvements over baseline: merged DTE90 into DTE60 (limited samples), "
-                  "pruned price-level features, switched to time-based train/test split (no future leakage), "
-                  "added class weights, and tuned hyperparameters with Optuna + TimeSeriesSplit CV."),
-                P("RF, XGBoost, and LightGBM all trained. Scores drop vs baseline — expected when "
-                  "moving from stratified to temporal split (realistic evaluation).", cls="mt-2"),
+                H4("Optuna-Tuned Models (3-Class)", style=f"color:{_IMMACULATA};"),
+                P("Hyperparameters tuned via Optuna (20 trials each) with TimeSeriesSplit cross-validation "
+                  "and balanced class weights. All three tree-based models trained: RF, XGBoost, LightGBM."),
+                P("RF: 50.0% / 0.338 macro F1. XGB: 50.4% / 0.342. LightGBM: 48.4% / 0.349. "
+                  "Tuning provides minimal improvement over baselines — all remain near random-level (0.333).", cls="mt-2"),
+                P("LightGBM is best by macro F1 despite lowest accuracy, suggesting better minority-class "
+                  "recall. Top features: vol_63d, vol_21d, bb_width, earnings_growth_yoy, cash_ratio.", cls="mt-2"),
             ),
-            _doc_fig("improved_confusion_matrices.png", "6-class confusion matrices for tuned RF, XGB, and LGBM."),
-        ),
-        _doc_row(
-            P("Switching from stratified to time-based split causes scores to drop — expected, since the model "
-              "can no longer memorize future patterns. This is the honest evaluation."),
-            _doc_fig("old_vs_new_comparison.png", "Baseline vs improved — temporal split is harder but honest."),
-        ),
-        _doc_row(
-            P("With proper temporal validation, all three tree-based models (RF, XGB, LGBM) perform similarly. "
-              "No single model dominates — the real gains come from feature engineering and class reduction."),
-            _doc_fig("model_comparison.png", "Time-based split — all models perform similarly."),
+            _doc_fig("improved_confusion_matrices.png", "Tuned RF, XGB, and LGBM 3-class confusion matrices."),
         ),
         # Walk-forward
         _doc_row(
@@ -653,50 +753,58 @@ def _docs_models():
                 P("Walk-forward validation retrains annually on expanding windows — year N uses "
                   "only data from years 1 to N-1. This eliminates any future leakage and simulates "
                   "real deployment.", cls="mt-2"),
-                P("Overall macro F1 = 0.474, consistently above random baseline (0.333). "
-                  "Strong ATM recall (415/619), OTM10 reasonably separated (156/261).", cls="mt-2"),
+                P("Overall macro F1 = 0.468, consistently above random baseline (0.333). "
+                  "Strong ATM recall (13,472 correct), OTM10 reasonably separated (1,850 correct out of 4,557).", cls="mt-2"),
             ),
             _doc_fig("walkforward_confusion_matrix.png", "Walk-forward confusion matrix (LGBM, 3-class)."),
         ),
         _doc_row(
-            P("Walk-forward F1 varies by year — peaks around 0.55 in 2014-2015 and 2018, dips to ~0.36 "
-              "in 2024. The model beats random in every year tested. IV features (iv_change, iv_skew, "
-              "iv_term_structure, iv_rank) consistently appear in the top 20."),
+            P("Walk-forward F1 varies by year — peaks at 0.60 in 2019, sustained above 0.50 from 2015-2021, "
+              "dips to ~0.32 in 2023. The model beats random (0.333) in most years. "
+              "IV features (iv_mean, iv_std, iv_change, iv_rank) dominate the top 4 feature importances."),
             _doc_fig("walkforward_yearly_f1.png", "Macro F1 by year — always above random baseline."),
         ),
         # LSTM
+        # STALE figure from prior 6-class iteration:
+        #   _doc_fig("lstm_confusion_matrices.png", ...) — 6-class + two-stage LSTM variants
+        # Replaced with 3-class equivalent: lstm_confusion_matrix.png (singular)
         _doc_row(
             Div(
                 H4("LSTM Sequence Model", style=f"color:{_IMMACULATA};"),
-                P("LSTM with temporal attention mechanism using multi-step historical sequences. "
-                  "Tested on both 6-class direct and two-stage (moneyness + maturity) targets."),
+                P("Bidirectional LSTM with temporal attention using 60-day lookback sequences of daily features. "
+                  "3-class moneyness target, 80/20 time-based split (1,010 train / 379 test sequences)."),
+                P("46.2% accuracy / 0.411 macro F1. Top-2 accuracy of ~70% — the correct class is usually "
+                  "the model's 1st or 2nd prediction. Early stopping at epoch 29 (patience=15).", cls="mt-2"),
                 P("Validation loss diverges after ~20 epochs indicating overfitting — expected with "
                   "~1,300 samples. Tree-based models outperform on this dataset size.", cls="mt-2"),
             ),
             _doc_fig("lstm_training_curves.png", "LSTM training — validation diverges after ~20 epochs."),
         ),
         _doc_row(
-            P("Two-stage LSTM collapses predictions toward ATM_LONG — the dominant class absorbs most "
-              "predictions. The 6-class LSTM shows slightly better spread but still underperforms "
-              "tree-based models. With ~1,300 samples, sequence models lack enough data to generalize."),
-            _doc_fig("lstm_confusion_matrices.png", "LSTM confusion matrices — 6-class and two-stage variants."),
+            P("LSTM is better at predicting OTM10 (96 correct) than the tree baselines, but struggles with "
+              "OTM5 (only 14 correct out of 71). ATM predictions scatter across all classes (65/24/72). "
+              "With ~1,300 samples, sequence models lack enough data to generalize."),
+            _doc_fig("lstm_confusion_matrix.png", "LSTM 3-class confusion matrix — better OTM10, weak OTM5."),
         ),
     )
 
 
 def _docs_results():
     """Section 6: All models comparison and financial returns."""
+    # NOTE: all_models_comparison.png is STALE — shows 9-class and 6-class models
+    # that no longer exist in the notebooks (all rewritten to 3-class).
+    # TODO: regenerate when notebook 08 (model comparison) is built.
     return _doc_section("doc-results", "Results",
         _doc_row(
             Div(
-                P("The 6-class two-stage approach achieves highest raw accuracy (83.5%) but uses "
-                  "non-temporal validation — inflated by data leakage. The walk-forward LGBM 3-class "
-                  "model (production) achieves 47.4% macro F1 with realistic temporal evaluation."),
-                P("Tree-based models (RF, XGB, LGBM) consistently outperform LSTMs on this tabular "
-                  "dataset. LightGBM is selected for production due to fast inference, native "
-                  "categorical support, and best walk-forward stability.", cls="mt-2"),
+                P("All models compared across the full development progression. Baseline 9-class models "
+                  "(RF 0.358, XGB 0.356 F1) used stratified splits — inflated by data leakage. "
+                  "Time-based 6-class splits drop sharply (0.17-0.23 F1), revealing the true difficulty."),
+                P("The LSTM daily-sequence model (0.411 F1) benefits from temporal patterns but is limited by "
+                  "sample size. Walk-forward LGBM 3-class (production, 0.468 F1) achieves best honest evaluation. "
+                  "LightGBM selected for production: fast inference, native categorical support, walk-forward stability.", cls="mt-2"),
             ),
-            _doc_fig("all_models_comparison.png", "All models — two-stage inflated by non-temporal split."),
+            _doc_fig("all_models_comparison.png", "Model development progression — includes prior 9-class and 6-class iterations (since superseded by 3-class)."),
         ),
         _doc_row(
             P("Cumulative returns comparison under walk-forward evaluation. The Oracle strategy "

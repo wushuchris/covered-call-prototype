@@ -13,7 +13,7 @@ import uvicorn
 from src.utils import create_logger, ServiceRequest
 from src.inference.inference_utils import unpack_request
 from src.inference.daily import run_daily_inference
-from src.inference.backtesting import run_backtest
+from src.inference.backtesting import run_backtest, run_backtest_all
 
 logger = create_logger("inference")
 
@@ -49,14 +49,20 @@ async def inference_endpoint(body: ServiceRequest):
 async def backtest_endpoint(body: ServiceRequest):
     """Receive a backtest request and run the backtesting pipeline.
 
+    Extracts preset and budget from the ServiceRequest params.
+    Scoring, allocation, and per-bucket return lookup all happen here.
+
     Args:
         body: ServiceRequest parsed from JSON by FastAPI.
 
     Returns:
-        Dict with backtest report.
+        Dict with backtest report (strategy + baseline metrics).
     """
     try:
-        result = await run_backtest()
+        req = unpack_request(body)
+        year = req.params.get("year", "all")
+        budget = float(req.params.get("budget", 100_000))
+        result = await run_backtest_all(budget=budget, year=year)
         return result
     except Exception as e:
         logger.error(f"Error on /backtest: {e}")
