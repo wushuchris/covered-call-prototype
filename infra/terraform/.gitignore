@@ -1,0 +1,12 @@
+# Terraform state — contains sensitive info, never commit
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.d/
+
+# Your real variable values — never commit
+terraform.tfvars
+
+# Crash logs
+crash.log
