@@ -1,0 +1,16 @@
+creation_timestamp: 1775166678713
+current_stage: None
+deployment_job_state: null
+description: null
+last_updated_timestamp: 1775166678713
+model_id: m-daf56403d48c42ca84d93d021fb20e26
+name: CoveredCallLSTMCNN
+run_id: 2bdedd0cec294ccbb5de75eb638bcd79
+run_link: null
+source: models:/m-daf56403d48c42ca84d93d021fb20e26
+status: READY
+status_message: null
+storage_location: /Users/swathi/Downloads/capstone-aai-590/covered-call-prototype/final_notebooks/../mlruns/196258204505635022/models/m-daf56403d48c42ca84d93d021fb20e26/artifacts
+user_id: null
+version: 1
+workspace: default

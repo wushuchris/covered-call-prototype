@@ -38,6 +38,7 @@ services:
     environment:
       - MODEL_PATH=/app/saved_models/lstm_cnn_best_model.pth
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_MODEL_URI=models:/CoveredCallLSTMCNN/Champion
     ports:
       - "8000:8000"
     depends_on:
