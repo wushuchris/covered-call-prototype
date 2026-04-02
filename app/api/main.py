@@ -26,7 +26,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[0]))
 from model.lstm_cnn import load_model, predict
 
 # ── Logging ────────────────────────────────────────────────────────────────
