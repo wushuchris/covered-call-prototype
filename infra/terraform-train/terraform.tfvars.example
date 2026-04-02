@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in your values.
+
+aws_region     = "us-east-1"
+instance_type  = "g4dn.xlarge"    # 1x T4 GPU — good for training
+spot_max_price = "0.50"           # on-demand is ~$0.526, spot is usually ~$0.15–0.20
+
+key_pair_name  = "covered-call-gpu-key"
+your_ip_cidr   = "130.45.13.198/32"     # curl https://checkip.amazonaws.com
+repo_url       = "https://github.com/wushuchris/covered-call-prototype"
