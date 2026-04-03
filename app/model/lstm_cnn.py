@@ -33,6 +33,8 @@ class LSTMCNNClassifier(nn.Module):
         self.cnn = nn.Sequential(
             nn.Conv1d(n_features, cnn_out_channels, kernel_size=kernel_size, padding=pad),
             nn.BatchNorm1d(cnn_out_channels), nn.ReLU(), nn.Dropout(dropout),
+            nn.Conv1d(cnn_out_channels, cnn_out_channels, kernel_size=kernel_size, padding=pad),
+            nn.BatchNorm1d(cnn_out_channels), nn.ReLU(), nn.Dropout(dropout),
             nn.AdaptiveAvgPool1d(1),
         )
         self.lstm = nn.LSTM(
