@@ -265,39 +265,104 @@ with tab2:
             st.pyplot(fig)
             plt.close()
 
-        # ── Probability heatmap (sample of 50) ───────────────────────────
-        st.markdown("**Probability Heatmap (first 50 predictions)**")
         prob_cols = [c for c in df_res.columns if c.startswith("prob_")]
-        heatmap_df = df_res[prob_cols].head(50).rename(
-            columns={c: c.replace("prob_","") for c in prob_cols}
-        )
-        fig, ax = plt.subplots(figsize=(12, 6))
-        sns.heatmap(heatmap_df.T, cmap="YlOrRd", vmin=0, vmax=1,
-                    ax=ax, cbar_kws={"label": "Probability"})
-        ax.set_xlabel("Prediction Index")
-        ax.set_ylabel("Class")
-        ax.set_title("Softmax Probabilities — First 50 Predictions")
+        clean_prob_cols = {c: c.replace("prob_", "") for c in prob_cols}
+
+        # ── Mean probability per class ────────────────────────────────────
+        st.markdown("**Mean Predicted Probability per Class (all predictions)**")
+        mean_probs = df_res[prob_cols].mean().rename(clean_prob_cols)
+        fig, ax = plt.subplots(figsize=(10, 4))
+        colors = [CLASS_COLORS.get(c, "#999") for c in mean_probs.index]
+        bars = ax.bar(mean_probs.index, mean_probs.values, color=colors)
+        for bar, val in zip(bars, mean_probs.values):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
+                    f"{val:.3f}", ha="center", va="bottom", fontsize=9)
+        ax.set_ylabel("Mean Probability")
+        ax.set_title(f"Average Softmax Probability per Class — {len(df_res):,} predictions")
+        ax.set_ylim(0, mean_probs.max() * 1.2)
+        plt.xticks(rotation=15, ha="right")
         plt.tight_layout()
         st.pyplot(fig)
         plt.close()
+
+        # ── Probability heatmap — all predictions ─────────────────────────
+        st.markdown("**Probability Heatmap — All Predictions**")
+        n_total = len(df_res)
+        if n_total > 500:
+            st.caption(f"Showing all {n_total:,} predictions. Use the slider to zoom in.")
+            col_s1, col_s2 = st.columns(2)
+            with col_s1:
+                start_idx = st.slider("Start index", 0, max(0, n_total - 50), 0, step=10)
+            with col_s2:
+                window = st.slider("Window size", 50, min(500, n_total), 100, step=50)
+            heatmap_slice = df_res[prob_cols].iloc[start_idx:start_idx + window]
+            title_suffix = f"Predictions {start_idx}–{start_idx + len(heatmap_slice) - 1}"
+        else:
+            heatmap_slice = df_res[prob_cols]
+            title_suffix = f"All {n_total} Predictions"
+
+        heatmap_df = heatmap_slice.rename(columns=clean_prob_cols)
+        fig_h = max(4, min(len(heatmap_df) * 0.06, 14))
+        fig, ax = plt.subplots(figsize=(14, fig_h))
+        sns.heatmap(
+            heatmap_df.T, cmap="YlOrRd", vmin=0, vmax=1,
+            ax=ax, cbar_kws={"label": "Probability"},
+            xticklabels=max(1, len(heatmap_df) // 50),
+        )
+        ax.set_xlabel("Prediction Index")
+        ax.set_ylabel("Class")
+        ax.set_title(f"Softmax Probabilities — {title_suffix}")
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+
+        # ── Confidence over time (line chart) ────────────────────────────
+        st.markdown("**Prediction Confidence Across All Sequences**")
+        fig, ax = plt.subplots(figsize=(14, 3))
+        ax.plot(df_res.index, df_res["confidence"], color="#1565C0", linewidth=0.8, alpha=0.7)
+        ax.axhline(df_res["confidence"].mean(), color="red", linestyle="--",
+                   linewidth=1, label=f"Mean {df_res['confidence'].mean():.2%}")
+        ax.set_xlabel("Prediction Index")
+        ax.set_ylabel("Confidence")
+        ax.set_title("Model Confidence per Prediction")
+        ax.legend(fontsize=9)
+        ax.set_ylim(0, 1)
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+
+        # ── Per-class confidence stats ────────────────────────────────────
+        st.markdown("**Confidence Statistics per Predicted Class**")
+        conf_stats = (
+            df_res.groupby("predicted_class")["confidence"]
+            .agg(Count="count", Mean="mean", Median="median",
+                 Min="min", Max="max", Std="std")
+            .reset_index()
+            .rename(columns={"predicted_class": "Class"})
+            .sort_values("Count", ascending=False)
+        )
+        conf_stats[["Mean", "Median", "Min", "Max", "Std"]] = \
+            conf_stats[["Mean", "Median", "Min", "Max", "Std"]].applymap(lambda x: f"{x:.3f}")
+        st.dataframe(conf_stats, use_container_width=True, hide_index=True)
 
         # ── Class descriptions ────────────────────────────────────────────
         st.markdown("**What each prediction means:**")
         desc_df = pd.DataFrame([
             {"Strategy Bucket": k, "Description": v,
-             "Predicted Count": int((df_res["predicted_class"] == k).sum())}
+             "Predicted Count": int((df_res["predicted_class"] == k).sum()),
+             "% of Total": f"{(df_res['predicted_class'] == k).mean():.1%}"}
             for k, v in CLASS_DESCRIPTIONS.items()
         ])
         st.dataframe(desc_df, use_container_width=True, hide_index=True)
 
-        # ── Raw results table ─────────────────────────────────────────────
-        with st.expander("📋 Full Predictions Table"):
-            st.dataframe(df_res, use_container_width=True)
+        # ── Full predictions table ────────────────────────────────────────
+        st.markdown("**Full Predictions Table**")
+        st.dataframe(df_res, use_container_width=True, height=400)
 
         # ── Download ──────────────────────────────────────────────────────
         csv_bytes = df_res.to_csv(index=False).encode()
         st.download_button(
-            label="⬇️ Download Predictions as CSV",
+            label="⬇️ Download All Predictions as CSV",
             data=csv_bytes,
             file_name="lstm_cnn_predictions.csv",
             mime="text/csv",
