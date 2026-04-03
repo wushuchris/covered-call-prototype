@@ -1,0 +1,15 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is git-ignored.
+
+aws_region    = "us-east-1"
+instance_type = "t3.medium"
+
+# Name of the EC2 key pair you created in the AWS Console (without .pem)
+key_pair_name = "covered-call-gpu-key"
+
+# Your local IP in CIDR notation — restricts SSH/app access to only you
+# Find yours: curl https://checkip.amazonaws.com
+your_ip_cidr  = "130.45.13.198/32"
+
+# Full HTTPS URL to your GitHub repo
+repo_url      = "https://github.com/wushuchris/covered-call-prototype"

@@ -209,13 +209,14 @@ marimo/_lsp/
 __marimo__/
 secrets
 .env
-working notebooks/
-
 .DS_Store
 notebooks/02_preprocessing.ipynb
+working notebooks/
+eda_plots/
 
 # Project-specific
 logs/
 cache/
 *.egg-link
 .claude/
+data/

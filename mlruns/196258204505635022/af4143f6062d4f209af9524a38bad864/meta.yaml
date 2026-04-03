@@ -1,0 +1,14 @@
+artifact_uri: /Users/swathi/Downloads/capstone-aai-590/covered-call-prototype/final_notebooks/../mlruns/196258204505635022/af4143f6062d4f209af9524a38bad864/artifacts
+end_time: 1775177581105
+entry_point_name: ''
+experiment_id: '196258204505635022'
+lifecycle_stage: active
+run_id: af4143f6062d4f209af9524a38bad864
+run_name: PatchTST-Transformer
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1775177580961
+status: 3
+tags: []
+user_id: swathi

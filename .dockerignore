@@ -1,0 +1,51 @@
+# Git
+.git/
+.gitignore
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Jupyter / notebooks
+notebooks/
+notebooks-2/
+*.ipynb
+.ipynb_checkpoints/
+
+# Large datasets — not needed inside containers
+final_datasets/
+model_datasets/
+data/
+data_scripts/
+
+# MLflow local store (bind-mounted at runtime instead)
+mlruns/
+mlartifacts/
+
+# Other model files (only the one the API needs is copied explicitly)
+models/
+saved_artifacts/
+
+# Reports / figures
+reports/
+
+# Terraform
+infra/
+
+# Misc
+.DS_Store
+*.log
+README.md
+LICENSE

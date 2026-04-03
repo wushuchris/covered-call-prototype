@@ -1,0 +1,10 @@
+artifact_location: /Users/swathi/Downloads/capstone-aai-590/covered-call-prototype/final_notebooks/../mlruns/196258204505635022/models/m-b27cba902f154ced88840b773397295b/artifacts
+creation_timestamp: 1775177581318
+experiment_id: '196258204505635022'
+last_updated_timestamp: 1775177584047
+model_id: m-b27cba902f154ced88840b773397295b
+model_type: null
+name: model
+source_run_id: 714a1815692945d49ae07745cfbb3c86
+status: 2
+status_message: null

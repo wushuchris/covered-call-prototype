@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit real values.
+
+aws_region     = "us-east-1"
+instance_type  = "g4dn.xlarge"   # T4 GPU — cheapest GPU option
+use_spot       = true             # ~70% cheaper; set false if you can't risk interruption
+spot_max_price = "0.30"
+
+key_pair_name  = "your-key-pair-name"   # must already exist in AWS EC2 console
+
+# Find your IP: curl https://checkip.amazonaws.com
+your_ip_cidr   = "YOUR_PUBLIC_IP/32"
+
+# S3 bucket where your parquet data lives
+s3_data_bucket = "validex-ml-data"
+s3_data_key    = "data/clean/daily_stock_optimal_bucket_modeling_with_fred.parquet"
+
+volume_size_gb = 60
+project_name   = "covered-call-ml"

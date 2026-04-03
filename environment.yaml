@@ -54,3 +54,4 @@ dependencies:
       - optuna
       - shap
       - category-encoders
+      - mlflow
