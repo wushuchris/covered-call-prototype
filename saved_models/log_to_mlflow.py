@@ -45,10 +45,11 @@ def log_model(model_path: str, tracking_uri: str, register: bool) -> None:
         n_features       = len(feature_cols),
         seq_len          = seq_len,
         num_classes      = num_classes,
-        cnn_out_channels = p.get("cnn_out_channels", 64),
+        cnn_out_channels = p.get("cnn_out_channels", 128),
+        kernel_size      = p.get("kernel_size", 7),
         lstm_hidden      = p.get("lstm_hidden", 128),
         lstm_layers      = p.get("lstm_layers", 2),
-        attn_dim         = p.get("attn_dim", 64),
+        attn_dim         = p.get("attn_dim", 128),
         dropout          = p.get("dropout", 0.2),
     )
     model.load_state_dict(ckpt["model_state_dict"])
