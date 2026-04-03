@@ -1,0 +1,14 @@
+artifact_uri: /Users/swathi/Downloads/capstone-aai-590/covered-call-prototype/final_notebooks/../mlruns/196258204505635022/5e5d1439d95a462996e375be6ab63542/artifacts
+end_time: 1775177562618
+entry_point_name: ''
+experiment_id: '196258204505635022'
+lifecycle_stage: active
+run_id: 5e5d1439d95a462996e375be6ab63542
+run_name: XGBoost-Baseline
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1775177562479
+status: 3
+tags: []
+user_id: swathi

@@ -1,0 +1,14 @@
+artifact_uri: /Users/swathi/Downloads/capstone-aai-590/covered-call-prototype/final_notebooks/../mlruns/196258204505635022/c9bc969ea8e24fbc991a88a7c705c28f/artifacts
+end_time: 1775177550805
+entry_point_name: ''
+experiment_id: '196258204505635022'
+lifecycle_stage: active
+run_id: c9bc969ea8e24fbc991a88a7c705c28f
+run_name: LSTM-CNN-Best
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1775177550629
+status: 3
+tags: []
+user_id: swathi
