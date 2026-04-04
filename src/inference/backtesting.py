@@ -7,23 +7,13 @@
 # Cache-first: if a report exists on disk for the given preset, return it.
 # Otherwise run the full backtest and cache the result.
 #
-# NautilusTrader integration:
-#   The BacktestEngine scaffold is preserved for future use when venue,
-#   instrument, and order execution simulation are wired. For now, the
-#   backtest loop runs in plain Python using the scoring engine directly.
-#   NautilusTrader will replace the inner loop once order-level tracking
-#   is needed (fills, slippage, margin, position lifecycle).
+# The backtest loop runs in plain Python using the scoring engine directly.
 
 import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
 
-# NautilusTrader scaffold — preserved for future execution-level backtesting
-# from nautilus_trader.backtest.engine import BacktestEngine
-# from nautilus_trader.backtest.config import BacktestEngineConfig
-# from nautilus_trader.model import TraderId
-# from src.inference.strategy import CoveredCallStrategy, CoveredCallStrategyConfig
 
 from src.inference.scoring import (
     score_month, allocate, compute_metrics,
@@ -81,6 +71,78 @@ def _save_cached_report(report: dict, preset: str) -> None:
         _cache_path(preset).write_text(json.dumps(report, indent=2, default=str))
     except Exception:
         pass
+
+
+def _compute_argmax_return(month_data: pd.DataFrame,
+                           bucket_returns: pd.DataFrame, period) -> float:
+    """Compute return for Argmax strategy: model's top pick, all tickers, equal weight.
+
+    Args:
+        month_data: Feature store rows for one month (all tickers).
+        bucket_returns: Per-bucket returns DataFrame.
+        period: The year_month Period for this month.
+
+    Returns:
+        Equally-weighted average return across all tradeable tickers.
+    """
+    try:
+        month_br = bucket_returns[bucket_returns["year_month"] == period]
+        returns = []
+        for _, row in month_data.iterrows():
+            moneyness = row["model_moneyness"]
+            col = f"return_{moneyness}"
+            ticker_row = month_br[month_br["symbol"] == row["symbol"]]
+            if ticker_row.empty or col not in ticker_row.columns:
+                continue
+            val = ticker_row[col].iloc[0]
+            if not pd.isna(val):
+                returns.append(float(val))
+        return float(np.mean(returns)) if returns else 0.0
+    except Exception:
+        return 0.0
+
+
+def _compute_risk_adjusted_return(month_data: pd.DataFrame,
+                                  bucket_returns: pd.DataFrame,
+                                  period, avg_returns: dict) -> float:
+    """Compute return for Risk-Adjusted strategy: probability × expected return.
+
+    For each ticker, picks the bucket that maximizes P(bucket) × E[return|bucket],
+    then equal-weights across all tickers.
+
+    Args:
+        month_data: Feature store rows for one month (all tickers).
+        bucket_returns: Per-bucket returns DataFrame.
+        period: The year_month Period for this month.
+        avg_returns: Dict of average historical returns per bucket {ATM: x, OTM5: y, OTM10: z}.
+
+    Returns:
+        Equally-weighted average return across all tradeable tickers.
+    """
+    try:
+        month_br = bucket_returns[bucket_returns["year_month"] == period]
+        returns = []
+        for _, row in month_data.iterrows():
+            # Score each bucket: P(bucket) × E[return|bucket]
+            scores = {}
+            for cls in ["ATM", "OTM5", "OTM10"]:
+                prob = row.get(f"prob_{cls}", 0.0)
+                expected = avg_returns.get(cls, 0.0)
+                scores[cls] = prob * expected
+
+            # Pick the bucket with the highest risk-adjusted score
+            best_bucket = max(scores, key=scores.get)
+            col = f"return_{best_bucket}"
+
+            ticker_row = month_br[month_br["symbol"] == row["symbol"]]
+            if ticker_row.empty or col not in ticker_row.columns:
+                continue
+            val = ticker_row[col].iloc[0]
+            if not pd.isna(val):
+                returns.append(float(val))
+        return float(np.mean(returns)) if returns else 0.0
+    except Exception:
+        return 0.0
 
 
 def _compute_monthly_return(allocated: pd.DataFrame, budget: float,
@@ -166,6 +228,14 @@ def _run_backtest_loop(feature_store: pd.DataFrame, budget: float,
 
     strategy_returns = []
     baseline_returns = []
+    argmax_returns = []
+    risk_adj_returns = []
+
+    # Compute average historical returns per bucket for risk-adjusted scoring
+    # Uses expanding window: for each month, only use data available up to that point
+    avg_returns = {"ATM": 0.0, "OTM5": 0.0, "OTM10": 0.0}
+    cumulative_sums = {"ATM": 0.0, "OTM5": 0.0, "OTM10": 0.0}
+    cumulative_counts = {"ATM": 0, "OTM5": 0, "OTM10": 0}
 
     # Per-month detail for the UI timeline
     monthly_detail = []
@@ -194,8 +264,28 @@ def _run_backtest_loop(feature_store: pd.DataFrame, budget: float,
         else:
             baseline_ret = 0.0
 
+        # ── Argmax: model's top pick, all tickers, equal weight ──
+        argmax_ret = _compute_argmax_return(month_data, bucket_returns, month)
+
+        # ── Risk-Adjusted: P(bucket) × E[return|bucket], best score wins ──
+        risk_adj_ret = _compute_risk_adjusted_return(
+            month_data, bucket_returns, month, avg_returns,
+        )
+
         strategy_returns.append(strat_return)
         baseline_returns.append(baseline_ret)
+        argmax_returns.append(argmax_ret)
+        risk_adj_returns.append(risk_adj_ret)
+
+        # Update expanding average returns for risk-adjusted (no lookahead)
+        for cls in ["ATM", "OTM5", "OTM10"]:
+            col = f"return_{cls}"
+            if not month_br.empty and col in month_br.columns:
+                vals = month_br[col].dropna()
+                if not vals.empty:
+                    cumulative_sums[cls] += vals.sum()
+                    cumulative_counts[cls] += len(vals)
+                    avg_returns[cls] = cumulative_sums[cls] / cumulative_counts[cls]
 
         # Track detail
         monthly_detail.append({
@@ -204,6 +294,8 @@ def _run_backtest_loop(feature_store: pd.DataFrame, budget: float,
             "n_allocated": len(allocated),
             "strategy_return": round(strat_return, 6),
             "baseline_return": round(baseline_ret, 6),
+            "argmax_return": round(argmax_ret, 6),
+            "risk_adj_return": round(risk_adj_ret, 6),
             "top_picks": list(allocated["symbol"].values) if not allocated.empty else [],
         })
 
@@ -228,6 +320,16 @@ def _run_backtest_loop(feature_store: pd.DataFrame, budget: float,
             "name": "OTM10 all tickers, equal weight",
             "returns": baseline_returns,
             "metrics": compute_metrics(baseline_returns),
+        },
+        "argmax": {
+            "name": "Model top pick, all tickers, equal weight",
+            "returns": argmax_returns,
+            "metrics": compute_metrics(argmax_returns),
+        },
+        "risk_adjusted": {
+            "name": "P(bucket) × E[return], all tickers, equal weight",
+            "returns": risk_adj_returns,
+            "metrics": compute_metrics(risk_adj_returns),
         },
         "monthly_detail": monthly_detail,
     }
@@ -319,9 +421,11 @@ async def run_backtest_all(budget: float = 100_000, year: str = "all",
                 "metrics": report["strategy"]["metrics"],
                 "monthly_detail": report["monthly_detail"],
             }
-            # Baseline is same for all presets (computed in each loop, take from first)
+            # Baseline, argmax, risk_adjusted are same for all presets — take from first
             if "baseline" not in results:
                 results["baseline"] = report["baseline"]
+                results["argmax"] = report["argmax"]
+                results["risk_adjusted"] = report["risk_adjusted"]
 
         combined = {
             "year": year,
@@ -333,6 +437,8 @@ async def run_backtest_all(budget: float = 100_000, year: str = "all",
             },
             "presets": results,
             "baseline": results["baseline"],
+            "argmax": results["argmax"],
+            "risk_adjusted": results["risk_adjusted"],
         }
 
         _save_cached_report(combined, cache_key)
@@ -342,23 +448,3 @@ async def run_backtest_all(budget: float = 100_000, year: str = "all",
     except Exception as e:
         logger.error(f"Backtest_all failed: {e}")
         return {"error": f"Backtest_all failed: {e}"}
-
-
-# ── NautilusTrader scaffold ─────────────────────────────────────────────────
-# Preserved for future execution-level backtesting.
-# When venue/instruments are wired, the _run_backtest_loop above will be
-# replaced by:
-#
-#   1. BacktestEngine(config) with venue + instruments
-#   2. CoveredCallStrategy that calls score_month() in on_bar()
-#   3. engine.run() → extract fills, positions, account reports
-#   4. NautilusTrader handles order execution, slippage, margin natively
-#
-# def _build_engine() -> BacktestEngine:
-#     config = BacktestEngineConfig(trader_id=TraderId("BACKTESTER-001"))
-#     engine = BacktestEngine(config=config)
-#     # engine.add_venue(...)
-#     # engine.add_instrument(...)
-#     # engine.add_data(...)
-#     # engine.add_strategy(CoveredCallStrategy(config))
-#     return engine

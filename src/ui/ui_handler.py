@@ -43,6 +43,49 @@ async def handle_inference_call(ticker: str, date: str) -> dict:
         return {"error": f"Inference call failed: {e}"}
 
 
+async def handle_batch_inference(date: str) -> dict:
+    """Handle a batch inference request for all tickers.
+
+    Packs the date into a ServiceRequest and sends it to the
+    FastAPI inference service's /inference_batch endpoint.
+
+    Args:
+        date: Date string selected by the user.
+
+    Returns:
+        Dict with per-ticker results and summary, or error info.
+    """
+    try:
+        req = pack_request(ticker="", date=date)
+        async with aiohttp.ClientSession() as session:
+            result = await send_to_inference(session, req, "/inference_batch")
+        return result
+    except Exception as e:
+        return {"error": f"Batch inference call failed: {e}"}
+
+
+async def handle_model_metrics(year: str = "all",
+                               sample_type: str = "all") -> dict:
+    """Handle a model metrics request from the UI.
+
+    Calls the inference service's /model_metrics endpoint with filters.
+
+    Args:
+        year: Year filter.
+        sample_type: 'all', 'train', or 'test'.
+
+    Returns:
+        Dict with model metrics or error info.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"http://localhost:8009/model_metrics?year={year}&sample_type={sample_type}"
+            async with session.get(url) as resp:
+                return await resp.json()
+    except Exception as e:
+        return {"error": f"Model metrics call failed: {e}"}
+
+
 async def handle_backtest_call(year: str = "all",
                                budget: float = 100_000) -> dict:
     """Handle a backtesting request from the UI.

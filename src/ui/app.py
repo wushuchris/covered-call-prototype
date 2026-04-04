@@ -19,9 +19,17 @@
 from datetime import date
 
 from fasthtml.common import *
+import fasthtml.common as fh
 from monsterui.all import *
-from src.ui.ui_components import launcher_screen, trading_screen, inference_results_card, backtest_results_card, docs_screen
-from src.ui.ui_handler import handle_inference_call, handle_backtest_call
+from src.ui.ui_components import (
+    launcher_screen, trading_screen, inference_results_card,
+    batch_results_card, backtest_results_card, model_performance_card,
+    docs_screen, TICKERS,
+)
+from src.ui.ui_handler import (
+    handle_inference_call, handle_batch_inference,
+    handle_backtest_call, handle_model_metrics,
+)
 
 from src.utils import create_logger, log_call
 
@@ -125,23 +133,145 @@ def get():
         return Input(type="date", name="date", id="inference-date")
 
 
-# @ rt that handles user input, at first it should remove all html and return a plain hello world (testing boiler plate)
-@rt("/inference_call")
-@log_call(logger)
-async def post(date: str = "", ticker: str = ""):
-    """Handle inference call from the sidebar form.
+# toggle ticker dropdown enabled/disabled based on batch checkbox
+@rt("/toggle_ticker")
+def get(batch: str = ""):
+    """Return enabled or disabled ticker dropdown based on batch checkbox state."""
+    if batch:
+        return Select(
+            *[Option(t, value=t) for t in TICKERS],
+            name="ticker", id="inference-ticker",
+            disabled=True, style="opacity:0.5;",
+        )
+    return Select(
+        *[Option(t, value=t) for t in TICKERS],
+        name="ticker", id="inference-ticker",
+    )
 
-    Receives date and ticker from hx-include, forwards to
-    ui_handler, and returns the rendered results card.
+
+@rt("/ticker_chart")
+async def get(ticker: str = "", date: str = ""):
+    """Lazy-load a candlestick chart for a given ticker and date.
+
+    Called via hx-trigger='intersect once' when a batch modal becomes visible.
+    Fetches OHLC data from the inference service and returns an ApexChart.
     """
     try:
-        result = await handle_inference_call(ticker=ticker, date=date)
-        if "error" in result:
-            return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
-        return inference_results_card(result)
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            url = f"http://localhost:8009/chart_data?ticker={ticker}&date={date}"
+            async with session.get(url) as resp:
+                data = await resp.json()
+
+        chart_data = data.get("chart_data", [])
+        if chart_data:
+            return ApexChart(opts={
+                "chart": {"type": "candlestick", "height": 350},
+                "series": [{"name": ticker, "data": chart_data}],
+                "xaxis": {"type": "datetime"},
+                "yaxis": {"tooltip": {"enabled": True}},
+                "plotOptions": {"candlestick": {
+                    "colors": {"upward": "#0074c8", "downward": "#003b70"},
+                }},
+            })
+        return P("No chart data available.", style="color:#999; text-align:center;")
+    except Exception as e:
+        logger.error(f"Error on ticker_chart: {e}")
+        return P("Chart load failed.", style="color:#c62828;")
+
+
+@rt("/inference_call")
+@log_call(logger)
+async def post(date: str = "", ticker: str = "", batch: str = ""):
+    """Handle inference call from the sidebar form.
+
+    If batch checkbox is checked, runs inference for all tickers.
+    Otherwise runs single-ticker inference.
+    """
+    try:
+        if batch:
+            result = await handle_batch_inference(date=date)
+            if "error" in result:
+                return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
+            return batch_results_card(result)
+        else:
+            result = await handle_inference_call(ticker=ticker, date=date)
+            if "error" in result:
+                return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
+            return inference_results_card(result)
     except Exception as e:
         logger.error(f"Error on inference_call: {e}")
         return Div(P("Inference request failed.", cls="uk-text-danger"))
+
+
+@rt("/toggle_model_year")
+def get(sample_type: str = "all"):
+    """Enable/disable year dropdown based on sample type selection.
+
+    When Train or Test is selected, year is irrelevant — gray it out.
+    """
+    year_options = [fh.Option("All Years", value="all", selected=True)] + [
+        fh.Option(str(y), value=str(y)) for y in range(2008, 2026)
+    ]
+    disabled = sample_type in ("train", "test")
+    return fh.Select(
+        *year_options, name="year", id="model-year", cls="uk-select",
+        disabled=disabled, style="opacity:0.5;" if disabled else "",
+        hx_get="/toggle_model_sample",
+        hx_include="#model-year",
+        hx_target="#model-sample-type",
+        hx_swap="outerHTML",
+    )
+
+
+@rt("/toggle_model_sample")
+def get(year: str = "all"):
+    """Enable/disable sample type dropdown based on year selection.
+
+    When a specific year is selected, sample type is redundant — gray it out.
+    """
+    sample_options = [
+        fh.Option("All", value="all", selected=True),
+        fh.Option("Train Dataset", value="train"),
+        fh.Option("Test Dataset", value="test"),
+    ]
+    disabled = year != "all"
+    return fh.Select(
+        *sample_options, name="sample_type", id="model-sample-type", cls="uk-select",
+        disabled=disabled, style="opacity:0.5;" if disabled else "",
+        hx_get="/toggle_model_year",
+        hx_include="#model-sample-type",
+        hx_target="#model-year",
+        hx_swap="outerHTML",
+    )
+
+
+@rt("/model_metrics_call")
+@log_call(logger)
+async def get(sample_type: str = "all", year: str = "all"):
+    """Handle model metrics request (GET for lazy load, POST for button)."""
+    try:
+        result = await handle_model_metrics(year=year, sample_type=sample_type)
+        if "error" in result:
+            return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
+        return model_performance_card(result)
+    except Exception as e:
+        logger.error(f"Error on model_metrics_call: {e}")
+        return Div(P("Model metrics request failed.", cls="uk-text-danger"))
+
+
+@rt("/model_metrics_call")
+@log_call(logger)
+async def post(sample_type: str = "all", year: str = "all"):
+    """Handle model metrics request from sidebar button."""
+    try:
+        result = await handle_model_metrics(year=year, sample_type=sample_type)
+        if "error" in result:
+            return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
+        return model_performance_card(result)
+    except Exception as e:
+        logger.error(f"Error on model_metrics_call: {e}")
+        return Div(P("Model metrics request failed.", cls="uk-text-danger"))
 
 
 @rt("/backtest_call")

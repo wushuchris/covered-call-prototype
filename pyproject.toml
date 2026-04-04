@@ -14,7 +14,6 @@ dependencies = [
     "uvicorn",
     "aiohttp",
     "pydantic",
-    "nautilus_trader",
 ]
 
 [tool.setuptools.packages.find]

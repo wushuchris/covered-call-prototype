@@ -197,21 +197,32 @@ def _build_feature_store():
     mdata[iv_cols] = mdata.groupby("symbol")[iv_cols].ffill()
     mdata[iv_cols] = mdata[iv_cols].fillna(mdata[iv_cols].median())
 
+    # ── Use model's actual trained feature names (not stale metadata) ──
+    # Metadata lists 27 pre-IV features, but the model was trained on 34
+    # (after dropping 5 leaky features and adding 9 IV features).
+    trained_features = model.feature_name_
+    logger.info(f"Model trained on {len(trained_features)} features: {trained_features[:5]}...")
+
     # ── Ensure all model features exist and handle NaN ──
-    for col in feature_cols:
+    for col in trained_features:
         if col not in mdata.columns:
             mdata[col] = 0.0
-    mdata[feature_cols] = mdata[feature_cols].fillna(mdata[feature_cols].median())
+    mdata[trained_features] = mdata[trained_features].fillna(mdata[trained_features].median())
 
     # ── Run model on all rows ──
-    logger.info("Running model predictions...")
-    X = mdata[feature_cols].values
+    logger.info(f"Running model predictions with {len(trained_features)} features...")
+    X = mdata[trained_features].values
     predictions = model.predict(X)
     probabilities = model.predict_proba(X)
 
     mdata["model_moneyness_id"] = predictions
     mdata["model_moneyness"] = [MONEYNESS_MAP[p] for p in predictions]
     mdata["model_confidence"] = probabilities.max(axis=1)
+
+    # Store full probability distribution for risk-adjusted strategy
+    mdata["prob_ATM"] = probabilities[:, 0]
+    mdata["prob_OTM5"] = probabilities[:, 1]
+    mdata["prob_OTM10"] = probabilities[:, 2]
 
     # ── Apply maturity rule: iv_rank > 0.5 → SHORT, else LONG ──
     mdata["model_maturity"] = np.where(
@@ -340,12 +351,125 @@ def predict_bucket(ticker: str, date: str) -> dict:
             # Baseline
             "baseline": "OTM10_SHORT",
             "status": "historical",
-            "sample_type": "out-of-sample" if actual_month >= OOS_CUTOFF else "in-sample",
+            "sample_type": "Test Dataset" if actual_month >= OOS_CUTOFF else "Train Dataset",
         }
 
     except Exception as e:
         logger.error(f"predict_bucket failed: {e}")
         return {"error": f"Prediction failed: {e}", "ticker": ticker, "date": date}
+
+
+def compute_model_metrics(year: str = "all", sample_type: str = "all") -> dict:
+    """Compute model performance metrics from the feature store.
+
+    Calculates accuracy, macro F1, top-2 accuracy, and per-class
+    precision/recall/F1 from precomputed predictions vs ground truth.
+
+    Args:
+        year: Filter by year ('all' or e.g. '2020').
+        sample_type: Filter by sample type ('all', 'train', 'test').
+
+    Returns:
+        Dict with summary metrics, per-class breakdown, per-year breakdown,
+        and confidence analysis.
+    """
+    global _feature_store
+
+    if _feature_store is None:
+        initialize()
+
+    try:
+        df = _feature_store.copy()
+
+        # Apply filters
+        if year != "all":
+            df = df[df["decision_date"].dt.year == int(year)]
+        if sample_type == "train":
+            df = df[df["year_month"] < OOS_CUTOFF]
+        elif sample_type == "test":
+            df = df[df["year_month"] >= OOS_CUTOFF]
+
+        if df.empty:
+            return {"error": f"No data for year={year}, sample={sample_type}"}
+
+        n = len(df)
+        accuracy = float(df["model_correct"].mean())
+        top2 = float(df["model_top2_hit"].mean())
+
+        # Per-class metrics
+        classes = ["ATM", "OTM5", "OTM10"]
+        per_class = {}
+        for cls in classes:
+            true_mask = df["true_moneyness"] == cls
+            pred_mask = df["model_moneyness"] == cls
+            tp = int((true_mask & pred_mask).sum())
+            fp = int((~true_mask & pred_mask).sum())
+            fn = int((true_mask & ~pred_mask).sum())
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+            per_class[cls] = {
+                "precision": round(precision, 4),
+                "recall": round(recall, 4),
+                "f1": round(f1, 4),
+                "support": int(true_mask.sum()),
+                "predicted": int(pred_mask.sum()),
+            }
+
+        # Macro F1
+        macro_f1 = sum(v["f1"] for v in per_class.values()) / len(classes)
+
+        # Per-year breakdown
+        df["year"] = df["decision_date"].dt.year
+        per_year = []
+        for yr, grp in df.groupby("year"):
+            yr_acc = float(grp["model_correct"].mean())
+            yr_top2 = float(grp["model_top2_hit"].mean())
+            yr_n = len(grp)
+            # Per-year macro F1
+            yr_f1s = []
+            for cls in classes:
+                t = grp["true_moneyness"] == cls
+                p = grp["model_moneyness"] == cls
+                tp = int((t & p).sum())
+                fp = int((~t & p).sum())
+                fn = int((t & ~p).sum())
+                prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                yr_f1s.append(2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0)
+            per_year.append({
+                "year": int(yr),
+                "accuracy": round(yr_acc, 4),
+                "macro_f1": round(sum(yr_f1s) / len(yr_f1s), 4),
+                "top2": round(yr_top2, 4),
+                "n_samples": yr_n,
+            })
+
+        # Confidence analysis
+        correct = df[df["model_correct"]]
+        incorrect = df[~df["model_correct"]]
+        conf_analysis = {
+            "avg_when_correct": round(float(correct["model_confidence"].mean()), 4) if len(correct) > 0 else 0.0,
+            "avg_when_incorrect": round(float(incorrect["model_confidence"].mean()), 4) if len(incorrect) > 0 else 0.0,
+            "overall_avg": round(float(df["model_confidence"].mean()), 4),
+        }
+
+        return {
+            "n_samples": n,
+            "year_filter": year,
+            "sample_filter": sample_type,
+            "accuracy": round(accuracy, 4),
+            "macro_f1": round(macro_f1, 4),
+            "top2_accuracy": round(top2, 4),
+            "per_class": per_class,
+            "per_year": per_year,
+            "confidence": conf_analysis,
+            "model_name": "LGBM 3-Class Moneyness (Walk-Forward)",
+        }
+
+    except Exception as e:
+        logger.error(f"compute_model_metrics failed: {e}")
+        return {"error": f"Metrics computation failed: {e}"}
 
 
 def get_date_range() -> dict:

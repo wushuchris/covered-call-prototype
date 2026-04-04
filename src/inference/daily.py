@@ -35,3 +35,56 @@ async def run_daily_inference(ticker: str, date: str) -> dict:
 
     except Exception as e:
         return {"error": f"Daily inference failed: {e}"}
+
+
+async def run_batch_inference(date: str) -> dict:
+    """Run inference for all tickers in the universe on a given date.
+
+    Loops the full universe, collects predictions and chart data,
+    and computes summary statistics across all tickers.
+
+    Args:
+        date: Date string (YYYY-MM-DD).
+
+    Returns:
+        Dict with 'results' (list of per-ticker dicts) and 'summary' stats.
+    """
+    try:
+        if not validate_date(date):
+            return {"error": f"Invalid date format: '{date}'. Expected YYYY-MM-DD."}
+
+        results = []
+        for ticker in UNIVERSE:
+            result = simulate_inference(ticker=ticker, date=date)
+            if "error" not in result:
+                result["chart_data"] = build_candlestick_data(ticker=ticker, date=date)
+            results.append(result)
+
+        # Filter successful predictions for summary stats
+        valid = [r for r in results if "error" not in r]
+
+        if not valid:
+            return {"error": "No valid predictions for any ticker on this date."}
+
+        # Summary statistics
+        top = max(valid, key=lambda r: r.get("model_confidence", 0))
+        avg_conf = sum(r.get("model_confidence", 0) for r in valid) / len(valid)
+        correct_count = sum(1 for r in valid if r.get("model_correct"))
+
+        summary = {
+            "date": date,
+            "n_tickers": len(valid),
+            "n_errors": len(results) - len(valid),
+            "top_ticker": top.get("ticker", "?"),
+            "top_prediction": top.get("model_bucket", "?"),
+            "top_confidence": round(top.get("model_confidence", 0), 4),
+            "avg_confidence": round(avg_conf, 4),
+            "accuracy": round(correct_count / len(valid), 4) if valid else 0,
+            "sample_type": valid[0].get("sample_type", "?"),
+            "model": "LGBM 3-Class Moneyness",
+        }
+
+        return {"results": results, "summary": summary}
+
+    except Exception as e:
+        return {"error": f"Batch inference failed: {e}"}
