@@ -590,11 +590,15 @@ def _backtesting_section():
                     cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
                 ),
             ),
-            # Tab 3: MLflow (placeholder)
+            # Tab 3: MLflow (lazy-loaded on tab switch)
             Li(
-                Card(
-                    P("MLflow experiment tracking — coming soon.", cls=TextPresets.muted_sm),
-                    header=H4("MLflow Experiments", style=f"color:{_FOUNDERS};"),
+                Div(
+                    Loading(htmx_indicator=True, id="mlflow-spinner"),
+                    id="mlflow-results",
+                    hx_get="/mlflow_call",
+                    hx_trigger="intersect once",
+                    hx_swap="innerHTML",
+                    hx_indicator="#mlflow-spinner",
                 ),
             ),
             cls="uk-switcher mt-4",
@@ -882,15 +886,15 @@ def model_performance_card(data: dict):
              "Average confidence across all predictions regardless of correctness."),
         ]
 
-        # ── LGBM vs LSTM-CNN comparison (static from mlruns) ──
-        comparison_header = ["Metric", "LGBM 3-Class", "LSTM-CNN 7-Class"]
-        comparison_rows = [
-            {"Metric": "Task", "LGBM 3-Class": "3-class moneyness", "LSTM-CNN 7-Class": "7-class (moneyness x maturity)"},
-            {"Metric": "Test Macro F1", "LGBM 3-Class": f"{data.get('macro_f1', 0):.3f}", "LSTM-CNN 7-Class": "0.110"},
-            {"Metric": "Test Accuracy", "LGBM 3-Class": f"{data.get('accuracy', 0):.1%}", "LSTM-CNN 7-Class": "38.1%"},
-            {"Metric": "Validation", "LGBM 3-Class": "Walk-forward annual", "LSTM-CNN 7-Class": "Time-based 80/20"},
-            {"Metric": "Inference", "LGBM 3-Class": "Row lookup (<1ms)", "LSTM-CNN 7-Class": "PyTorch forward pass"},
-            {"Metric": "Status", "LGBM 3-Class": "Production", "LSTM-CNN 7-Class": "Experimental"},
+        # ── Model information (single column — LGBM production model) ──
+        info_header = ["Metric", "Value"]
+        info_rows = [
+            {"Metric": "Task", "Value": "3-class moneyness (ATM / OTM5 / OTM10)"},
+            {"Metric": "Macro F1", "Value": f"{data.get('macro_f1', 0):.3f}"},
+            {"Metric": "Accuracy", "Value": f"{data.get('accuracy', 0):.1%}"},
+            {"Metric": "Validation", "Value": "Walk-forward annual"},
+            {"Metric": "Inference", "Value": "Row lookup (<1ms)"},
+            {"Metric": "Status", "Value": "Production"},
         ]
 
         filter_label = f"Year: {year_filter}" if year_filter != "all" else "All Years"
@@ -920,9 +924,9 @@ def model_performance_card(data: dict):
                     style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.75rem; text-align:center;",
                 ),
                 DividerLine(),
-                # LGBM vs LSTM-CNN
-                H4("Model Comparison", style=f"color:{_IMMACULATA}; font-size:1rem;"),
-                TableFromDicts(header_data=comparison_header, body_data=comparison_rows),
+                # Model information
+                H4("Model Information", style=f"color:{_IMMACULATA}; font-size:1rem;"),
+                TableFromDicts(header_data=info_header, body_data=info_rows),
                 header=H4("Model Performance", style=f"color:{_FOUNDERS};"),
             ),
             # Per-year breakdown in a collapsible section
@@ -935,6 +939,162 @@ def model_performance_card(data: dict):
 
     except Exception:
         return _fallback("model performance")
+
+
+def mlflow_experiments_card(data: dict):
+    """Render MLflow experiment tracking: deduplicated runs table with artifact modals.
+
+    Note: MLflow tracking covers the team's deep learning and XGBoost experiments
+    (7-class task). The production LGBM 3-class model was trained separately via
+    walk-forward validation in the experiment notebooks.
+
+    Args:
+        data: Dict from load_experiments() with experiment runs.
+
+    Returns:
+        Div with experiment table and confusion matrix / ROC curve modals.
+    """
+    try:
+        experiments = data.get("experiments", [])
+        if not experiments:
+            return Card(
+                P("No MLflow experiments found.", cls=TextPresets.muted_sm),
+                header=H4("MLflow Experiments", style=f"color:{_FOUNDERS};"),
+            )
+
+        all_runs = []
+        for exp in experiments:
+            all_runs.extend(exp["runs"])
+
+        if not all_runs:
+            return Card(
+                P("No experiment runs found.", cls=TextPresets.muted_sm),
+                header=H4("MLflow Experiments", style=f"color:{_FOUNDERS};"),
+            )
+
+        # Build table rows + modals
+        header = Tr(
+            Th("Model"),
+            Th("Variant"),
+            Th("Classes"),
+            Th("Features"),
+            Th("Val F1"),
+            Th("Test F1"),
+            Th("Test Acc"),
+            Th("Test Bal. Acc"),
+            Th("Params"),
+            Th("Plots"),
+        )
+
+        rows = []
+        modals = []
+        for run in all_runs:
+            m = run.get("metrics", {})
+            run_id = run["run_id"][:8]
+
+            # Hyperparameters modal
+            params = run.get("params", {})
+            params_cell = "—"
+            if params:
+                params_modal_id = f"params-{run_id}"
+                param_items = [
+                    Tr(Td(k, cls=TextPresets.muted_sm), Td(v))
+                    for k, v in sorted(params.items())
+                ]
+                params_cell = A(
+                    UkIcon("settings", height=18, width=18),
+                    href=f"#{params_modal_id}", uk_toggle="",
+                    style=f"color:{_IMMACULATA}; cursor:pointer;",
+                    uk_tooltip="title: Hyperparameters",
+                )
+                modals.append(
+                    Modal(
+                        Table(
+                            Thead(Tr(Th("Parameter"), Th("Value"))),
+                            Tbody(*param_items),
+                            cls="uk-table uk-table-small uk-table-divider",
+                        ),
+                        header=f"{run['run_name']} — Hyperparameters",
+                        id=params_modal_id,
+                    )
+                )
+
+            # Confusion matrix modal
+            cm_path = run.get("artifacts", {}).get("confusion_matrix")
+            roc_path = run.get("artifacts", {}).get("roc_curves")
+
+            plot_links = []
+            if cm_path:
+                cm_modal_id = f"cm-{run_id}"
+                plot_links.append(
+                    A(UkIcon("grid", height=18, width=18),
+                      href=f"#{cm_modal_id}", uk_toggle="",
+                      style=f"color:{_IMMACULATA}; cursor:pointer;",
+                      uk_tooltip="title: Confusion Matrix")
+                )
+                modals.append(
+                    Modal(
+                        Img(src=f"/mlruns/{cm_path}", alt="Confusion Matrix",
+                            style="width:100%; border-radius:6px;"),
+                        header=f"{run['run_name']} — Confusion Matrix",
+                        id=cm_modal_id,
+                        dialog_cls="uk-modal-dialog-large",
+                    )
+                )
+
+            if roc_path:
+                roc_modal_id = f"roc-{run_id}"
+                plot_links.append(
+                    A(UkIcon("trending-up", height=18, width=18),
+                      href=f"#{roc_modal_id}", uk_toggle="",
+                      style=f"color:{_IMMACULATA}; cursor:pointer; margin-left:0.5rem;",
+                      uk_tooltip="title: ROC Curves")
+                )
+                modals.append(
+                    Modal(
+                        Img(src=f"/mlruns/{roc_path}", alt="ROC Curves",
+                            style="width:100%; border-radius:6px;"),
+                        header=f"{run['run_name']} — ROC Curves",
+                        id=roc_modal_id,
+                        dialog_cls="uk-modal-dialog-large",
+                    )
+                )
+
+            rows.append(Tr(
+                Td(Strong(run["run_name"])),
+                Td(run.get("variant", "—")),
+                Td(run.get("n_classes", "—")),
+                Td(run.get("n_features", "—")),
+                Td(f"{m.get('val_macro_f1', 0):.3f}" if m.get("val_macro_f1") else "—"),
+                Td(f"{m.get('test_macro_f1', 0):.3f}" if m.get("test_macro_f1") else "—"),
+                Td(f"{m.get('test_accuracy', 0):.1%}" if m.get("test_accuracy") else "—"),
+                Td(f"{m.get('test_balanced_accuracy', 0):.1%}" if m.get("test_balanced_accuracy") else "—"),
+                Td(params_cell),
+                Td(Span(*plot_links) if plot_links else "—"),
+            ))
+
+        exp_name = experiments[0].get("experiment_name", "Unknown")
+        total = experiments[0].get("total_runs", 0)
+        unique = experiments[0].get("unique_runs", 0)
+
+        return Div(
+            Card(
+                P(f"Experiment: {exp_name} | {total} total runs, {unique} unique",
+                  cls=TextPresets.muted_sm),
+                P("Deep learning and XGBoost runs tracked via MLflow (7-class task). "
+                  "LGBM 3-class production model tracked separately via walk-forward validation — included for comparison.",
+                  cls=TextPresets.muted_sm, style="margin-top:0.25rem; font-style:italic;"),
+                DividerLine(),
+                Table(Thead(header), Tbody(*rows),
+                      cls="uk-table uk-table-small uk-table-divider uk-table-hover"),
+                header=H4("MLflow Experiments", style=f"color:{_FOUNDERS};"),
+            ),
+            # All modals (params + plots) rendered at end of component
+            *modals,
+        )
+
+    except Exception:
+        return _fallback("MLflow experiments")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -171,8 +171,7 @@ def _compute_monthly_return(allocated: pd.DataFrame, budget: float,
         for _, row in allocated.iterrows():
             ticker = row["symbol"]
             bucket = row["model_bucket"]
-            moneyness = bucket.split("_")[0]
-            col = f"return_{moneyness}"
+            col = f"return_{bucket}"
 
             ticker_row = month_br[month_br["symbol"] == ticker]
             if ticker_row.empty or col not in ticker_row.columns:

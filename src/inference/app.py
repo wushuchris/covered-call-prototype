@@ -14,8 +14,9 @@ from src.utils import create_logger, ServiceRequest
 from src.inference.inference_utils import unpack_request
 from src.inference.daily import run_daily_inference, run_batch_inference
 from src.inference.chart import build_candlestick_data
-from src.inference.model import compute_model_metrics
+from src.inference.model import compute_model_metrics, get_lgbm_experiment_info
 from src.inference.backtesting import run_backtest_all
+from src.inference.mlflow_reader import load_experiments
 
 logger = create_logger("inference")
 
@@ -103,6 +104,28 @@ async def model_metrics_endpoint(year: str = "all", sample_type: str = "all"):
         return compute_model_metrics(year=year, sample_type=sample_type)
     except Exception as e:
         logger.error(f"Error on /model_metrics: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/mlflow_experiments")
+async def mlflow_experiments_endpoint():
+    """Return deduplicated MLflow experiment runs plus LGBM production model.
+
+    Reads mlruns/ directory directly — no MLflow server needed.
+    Appends the LGBM 3-class production model as an additional row.
+
+    Returns:
+        Dict with experiment metadata and unique runs.
+    """
+    try:
+        result = load_experiments()
+        lgbm = get_lgbm_experiment_info()
+        if lgbm and result.get("experiments"):
+            result["experiments"][0]["runs"].append(lgbm)
+            result["experiments"][0]["unique_runs"] += 1
+        return result
+    except Exception as e:
+        logger.error(f"Error on /mlflow_experiments: {e}")
         return {"error": str(e)}
 
 

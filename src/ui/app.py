@@ -24,11 +24,11 @@ from monsterui.all import *
 from src.ui.ui_components import (
     launcher_screen, trading_screen, inference_results_card,
     batch_results_card, backtest_results_card, model_performance_card,
-    docs_screen, TICKERS,
+    mlflow_experiments_card, docs_screen, TICKERS,
 )
 from src.ui.ui_handler import (
     handle_inference_call, handle_batch_inference,
-    handle_backtest_call, handle_model_metrics,
+    handle_backtest_call, handle_model_metrics, handle_mlflow_experiments,
 )
 
 from src.utils import create_logger, log_call
@@ -71,6 +71,7 @@ from starlette.routing import Mount
 _UI_DIR = _os.path.dirname(_os.path.abspath(__file__))
 _PROJECT_ROOT = _Path(__file__).resolve().parent.parent.parent
 _FIGURES_DIR = _PROJECT_ROOT / "reports" / "figures"
+_MLRUNS_DIR = _PROJECT_ROOT / "mlruns"
 
 app, rt = fast_app(
     pico=False,
@@ -84,6 +85,10 @@ app, rt = fast_app(
 # Serve reports/figures at /figures/ — mounted before catch-all, no symlinks, portable across clones
 if _FIGURES_DIR.exists():
     app.routes.insert(0, Mount("/figures", app=StaticFiles(directory=str(_FIGURES_DIR))))
+
+# Serve mlruns artifacts (confusion matrices, ROC curves) at /mlruns/
+if _MLRUNS_DIR.exists():
+    app.routes.insert(0, Mount("/mlruns", app=StaticFiles(directory=str(_MLRUNS_DIR))))
 
 
 # a @rt for project root/index, should serve a launching screen, minimalistic, USD colors and .svg logo centered, with a continue button
@@ -272,6 +277,20 @@ async def post(sample_type: str = "all", year: str = "all"):
     except Exception as e:
         logger.error(f"Error on model_metrics_call: {e}")
         return Div(P("Model metrics request failed.", cls="uk-text-danger"))
+
+
+@rt("/mlflow_call")
+@log_call(logger)
+async def get():
+    """Handle MLflow experiments request (lazy-loaded on tab switch)."""
+    try:
+        result = await handle_mlflow_experiments()
+        if "error" in result:
+            return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
+        return mlflow_experiments_card(result)
+    except Exception as e:
+        logger.error(f"Error on mlflow_call: {e}")
+        return Div(P("MLflow experiments request failed.", cls="uk-text-danger"))
 
 
 @rt("/backtest_call")

@@ -86,6 +86,23 @@ async def handle_model_metrics(year: str = "all",
         return {"error": f"Model metrics call failed: {e}"}
 
 
+async def handle_mlflow_experiments() -> dict:
+    """Handle MLflow experiments request from the UI.
+
+    Calls the inference service's /mlflow_experiments endpoint.
+
+    Returns:
+        Dict with experiment runs or error info.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = "http://localhost:8009/mlflow_experiments"
+            async with session.get(url) as resp:
+                return await resp.json()
+    except Exception as e:
+        return {"error": f"MLflow experiments call failed: {e}"}
+
+
 async def handle_backtest_call(year: str = "all",
                                budget: float = 100_000) -> dict:
     """Handle a backtesting request from the UI.

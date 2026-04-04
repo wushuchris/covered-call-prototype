@@ -472,6 +472,71 @@ def compute_model_metrics(year: str = "all", sample_type: str = "all") -> dict:
         return {"error": f"Metrics computation failed: {e}"}
 
 
+def get_lgbm_experiment_info() -> dict:
+    """Return LGBM production model info formatted like an MLflow run.
+
+    Computes test metrics from the feature store and extracts
+    hyperparameters from the model object.
+
+    Returns:
+        Dict matching the mlflow_reader run format.
+    """
+    global _feature_store
+
+    if _feature_store is None:
+        initialize()
+
+    try:
+        from sklearn.metrics import balanced_accuracy_score, f1_score, accuracy_score
+
+        model, _ = _load_model()
+
+        # Test set metrics (year_month >= 2025-01)
+        test = _feature_store[_feature_store["year_month"] >= OOS_CUTOFF]
+        y_true = test["true_moneyness"].map(MONEYNESS_TO_ID)
+        y_pred = test["model_moneyness_id"]
+
+        test_acc = float(accuracy_score(y_true, y_pred))
+        test_f1 = float(f1_score(y_true, y_pred, average="macro"))
+        test_bal = float(balanced_accuracy_score(y_true, y_pred))
+
+        # Walk-forward val F1 = 0.47 from CLAUDE.md (not recomputable here)
+        val_f1 = 0.4682
+
+        # Hyperparameters
+        raw_params = model.get_params()
+        params = {
+            k: str(v) for k, v in sorted(raw_params.items())
+            if v is not None and str(v) not in ("-1", "None")
+        }
+
+        return {
+            "run_id": "lgbm-production",
+            "run_name": "LGBM 3-Class (Production)",
+            "experiment_id": "local",
+            "model_type": "LightGBM Walk-Forward",
+            "variant": "production",
+            "n_classes": "3",
+            "n_features": str(len(model.feature_name_)),
+            "seq_len": "",
+            "metrics": {
+                "val_macro_f1": round(val_f1, 4),
+                "test_macro_f1": round(test_f1, 4),
+                "test_accuracy": round(test_acc, 4),
+                "test_balanced_accuracy": round(test_bal, 4),
+            },
+            "params": params,
+            "artifacts": {
+                "confusion_matrix": None,
+                "roc_curves": None,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"get_lgbm_experiment_info failed: {e}")
+        return {}
+
+
 def get_date_range() -> dict:
     """Return the valid date range for predictions.
 
