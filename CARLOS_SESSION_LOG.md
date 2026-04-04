@@ -212,6 +212,78 @@ Picked up from a crashed session (computer turned off). Restored services, insta
 
 **Next session priority**: Backtesting dashboards (ground truth metrics belong there), NautilusTrader engine wiring, Kosmos results review
 
+### 2026-04-03/04 — Session 4: Team Merge, Batch Inference, Dashboards, Docs Overhaul
+
+Merged main branch (team's work) into carlos. Resolved conflicts in .gitignore and README. Read and analyzed the team's entire codebase: `app/` (Streamlit + FastAPI + Docker), `saved_models/` (LSTM-CNN checkpoints), `saved_artifacts/` (PatchTST, XGBoost), `mlruns/` (20 experiment runs), `final_notebooks/` (7-class pipeline).
+
+**Key findings from team analysis:**
+- Team built a separate Streamlit UI + Docker deployment for LSTM-CNN 7-class model
+- Best LSTM-CNN: 0.110 macro F1 / 38.1% accuracy (regularised variant) — barely above random on 7-class
+- Our LGBM 3-class: 0.59 F1 / 63% accuracy on test — significantly better
+- The deployed Streamlit app serves the *worst* LSTM-CNN variant (0.091 F1, "Best" checkpoint)
+- Two completely different pipelines: experiment notebooks (3-class, our work) vs final notebooks (7-class, team's work)
+
+**NautilusTrader removal:**
+- Confirmed NautilusTrader was pure dead weight — imported but never instantiated, no venues/instruments/orders
+- Stripped from strategy.py, backtesting.py, pyproject.toml, carlos-reqs.txt
+- Preserved as `src/inference/nautilus_reference.py` (commented out reference)
+
+**Batch inference:**
+- Added "All Stocks" checkbox to inference sidebar with htmx dropdown toggle (grays out ticker selection)
+- Same button/route (`/inference_call`), branches internally on `batch` param
+- New `/inference_batch` endpoint loops all 10 tickers, returns per-ticker results + summary stats
+- Results panel shows summary card with expand icon → modal with all ticker rows
+- Each row has search icon → nested modal with lazy-loaded candlestick chart
+- Charts lazy-loaded via `hx-trigger="intersect once"` — solves ApexCharts hidden-container rendering issue
+
+**UI fixes:**
+- Replaced MonsterUI Toast with static `uk-alert` Div — Toast needs JS init that doesn't fire on htmx swap
+- Snap warnings now display correctly for both single and batch inference
+- Added tooltips (`uk-tooltip`) across all UI sections — plain English explanations on hover for:
+  - Inference: Prediction, Confidence, Baseline, Sample type
+  - Strategy: Annualized Return, Sharpe, Max Drawdown, Hit Rate, Avg P/L, Conservative/Balanced/Aggressive presets
+  - Model Performance: Accuracy, Macro F1, Top-2, Precision, Recall, F1, Support, confidence analysis
+
+**Dashboards — tabbed backtesting section:**
+- Restructured backtesting section with UIKit `uk-tab` + `uk-switcher` (zero JS)
+- Tab 1 — Strategy: existing backtest comparison, now with 6 columns (Baseline, Argmax, Risk-Adjusted, Conservative, Balanced, Aggressive)
+- Tab 2 — Model Performance: summary metrics, per-class breakdown, confidence analysis, LGBM vs LSTM-CNN comparison, per-year table. Lazy-loaded. Sidebar filters (sample type, year) with mutual grayout.
+- Tab 3 — MLflow: placeholder for experiment tracking
+
+**Model Performance tab:**
+- New `/model_metrics` endpoint computes live from feature store (not hardcoded)
+- Renamed in-sample/out-of-sample → Train Dataset/Test Dataset throughout
+- Default view shows Test Dataset (63% acc, 0.59 F1) not inflated All Data (97%)
+- Filter toggles: Train/Test grays out year; specific year grays out sample type
+- Train/test split confirmed: train = all data < 2025, test = 2025 (100 samples)
+
+**Strategy backtest — Argmax and Risk-Adjusted columns:**
+- Added `_compute_argmax_return()` — model's top pick per ticker, all tickers, equal weight
+- Added `_compute_risk_adjusted_return()` — P(bucket) × E[return|bucket] with expanding historical averages (no lookahead)
+- Stored full probability distribution (prob_ATM/OTM5/OTM10) in feature store for risk-adjusted scoring
+- Risk-Adjusted achieved best Sharpe (2.69) and best max drawdown (-19.6%) across all strategies
+- Budget input commented out — percentage metrics invariant to budget scale
+
+**Feature store bug fix:**
+- Discovered metadata listed 27 features but model trained on 34 (27 base - 5 dropped + 9 IV + 3 leaky removed)
+- Old feature store masked the bug (loaded from cached .parquet)
+- Fixed: now uses `model.feature_name_` directly instead of stale metadata
+
+**Documentation overhaul:**
+- Added sticky left sidebar with scrollspy navigation (Nymo whitepaper style)
+- Restructured from 6 to 8 sections: Overview, Data Pipeline, EDA, Features, Tree-Based Pipeline, Deep Learning Pipeline, Results, Strategy & Post-Inference
+- Features section: two-column layout (LGBM features left | DL features right)
+- Results section: two-column layout (3-class metrics left | 7-class metrics right)
+- Tree-Based Pipeline: full progression (RF → XGB → LGBM → walk-forward + LSTM 3-class comparison)
+- Deep Learning Pipeline: XGBoost 7-class baseline → LSTM-CNN architecture (3 variants, 20 MLflow runs) → PatchTST → Docker deployment
+- Strategy & Post-Inference: scoring engine documentation (3 components, 3 presets), backtesting results
+- Audited all figures — removed misleading ones (broken Oracle cumulative returns, wrong feature importance placements, stale 9-class/6-class figures)
+
+**Stub cleanup:**
+- Removed empty stub directories from main merge: `src/models/`, `src/features/`, `src/evaluation/`
+
+**Next session priority**: MLflow tab (serve experiment data on Pi), budget scoring redesign (make budget meaningful), notebook backtest strategy integration
+
 ---
 
 ## Proposed Dataset Redesign (TEAM DECISION REQUIRED)

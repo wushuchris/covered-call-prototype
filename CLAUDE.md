@@ -21,6 +21,7 @@ deploy/setup_services.sh         — systemd (gunicorn + uvicorn), auto-start
 
 src/
 ├── utils.py                     — logger, log_call decorator, ServiceRequest (shared Pydantic model)
+├── data/                        — computed parquets (bucket_returns)
 ├── ui/
 │   ├── app.py                   — FastHTML :8008 (routes, USD branding, local fonts)
 │   ├── ui_components.py         — MonsterUI component tree (launcher, trading, docs screens)
@@ -28,13 +29,15 @@ src/
 │   ├── ui_utils.py              — pack_request, send_to_inference
 │   └── static/                  — logo, fonts (served locally, no external API calls)
 └── inference/
-    ├── app.py                   — FastAPI :8009 (/inference, /backtest endpoints)
-    ├── model.py                 — model loading, feature store, predict_bucket()
-    ├── daily.py                 — single-day inference orchestration
+    ├── app.py                   — FastAPI :8009 (/inference, /inference_batch, /backtest, /model_metrics, /chart_data)
+    ├── model.py                 — model loading, feature store, predict_bucket(), compute_model_metrics()
+    ├── daily.py                 — single-day + batch inference orchestration
     ├── chart.py                 — OHLC candlestick data builder
-    ├── strategy.py              — CoveredCallStrategy (NautilusTrader) + inference wrappers
-    ├── backtesting.py           — NautilusTrader BacktestEngine + caching
-    └── inference_utils.py       — input validation
+    ├── strategy.py              — simulate_inference() wrapper (NautilusTrader removed)
+    ├── scoring.py               — composable scoring engine (confidence, TC, delta-hedge)
+    ├── backtesting.py           — backtest loop + caching (Argmax, Risk-Adjusted, 3 presets)
+    ├── inference_utils.py       — input validation
+    └── nautilus_reference.py    — commented-out NautilusTrader class (reference only)
 ```
 
 ### Data Flow
@@ -62,39 +65,46 @@ These are non-negotiable. Taken from `persistence_agent/microservices_grounding.
 3. **Async first** — Don't block the event loop. Use `async def` for all service entry points and inter-service calls.
 4. **One-shot calls** — Each request triggers a chain of functions and returns a self-contained Div. Sections can run concurrently.
 5. **Modularity (zero-trust)** — A file/section/service does not know and does not care how the next on-chain function handles information. Exception: shared `ServiceRequest` format.
-6. **Functional first** — No OOP where it isn't needed. Plain function calls are fine. OOP is fine when the framework demands it (e.g., NautilusTrader `CoveredCallStrategy(Strategy)`).
+6. **Functional first** — No OOP where it isn't needed. Plain function calls are fine.
 7. **Readable** — Teammates must be able to understand the code and follow along. If things get too abstract, simplify.
 8. **Docstrings** — On all relevant functions.
 9. **Try-except** — On all service entry points and anywhere failure should be logged rather than crash.
-10. **Minimal dependencies** — FastHTML, MonsterUI, FastAPI, NautilusTrader, Pydantic, LightGBM, scikit-learn, joblib. Do not add new deps without explicit approval.
+10. **Minimal dependencies** — FastHTML, MonsterUI, FastAPI, Pydantic, LightGBM, scikit-learn, joblib. Do not add new deps without explicit approval.
 11. **UI blocks during requests** — Temporary blocks on interactive elements until the previous response finishes rendering. If something fails, a generic fallback Div keeps the chain going.
 
 ---
 
 ## Strategy & Backtesting
 
-The `CoveredCallStrategy` in `src/inference/strategy.py` is the **shared core** — it powers both:
-- The **backtesting engine** (NautilusTrader `BacktestEngine`)
-- The **backtesting dashboards** (UI visualization of strategy results)
+The scoring engine in `src/inference/scoring.py` sits between model predictions and trading decisions. NautilusTrader was evaluated and removed — the backtest loop runs in plain Python.
 
-### Design Principles
+### Scoring Engine
 
-- **Modular**: The strategy is composable — individual components (model selection, moneyness, maturity, entry/exit rules) can be swapped independently.
-- **UI-configurable**: Users will be able to modify strategy parameters from the trading screen (ambitious, but that's the target).
-- **Plug-and-play models**: The inference service supports multiple models. Teammates (Swathi, Fatimat) are training new ones — integrating a better-performing model should require minimal code changes.
-- **Easy to follow**: Anyone on the team should be able to read the strategy code and understand the decision logic without jumping through abstractions.
+Three weighted score components per ticker per month:
+1. **Model Confidence** — LGBM prediction probability
+2. **Transaction Cost** — bid-ask spread + turnover penalty
+3. **Delta-Hedged Return** — vol premium after removing directional exposure
 
-### Current Models
+### Strategy Presets
 
-Located in `models/`. Best two will be wired into the inference service with UI toggle:
+| Preset | Confidence | TC | Delta-Hedge | Positions | Sizing |
+|--------|-----------|-----|-------------|-----------|--------|
+| Conservative | 30% | 50% | 20% | 7 | Equal |
+| Balanced | 33% | 33% | 34% | 5 | Equal |
+| Aggressive | 60% | 10% | 30% | 3 | Proportional |
 
-| Model | File | Macro F1 |
-|-------|------|----------|
-| LightGBM walk-forward | `lgbm_walkforward_daily.joblib` | 0.47 |
-| LightGBM tuned | `lgbm_tuned_3class.joblib` | 0.35 |
-| LSTM daily | `lstm_3class_daily.pt` | 0.41 |
-| XGBoost tuned | `xgb_tuned_3class.joblib` | 0.34 |
-| RF tuned | `rf_tuned_3class.joblib` | 0.34 |
+### Additional Strategies (no scoring)
+
+- **Argmax** — model's top pick per ticker, all tickers, equal weight
+- **Risk-Adjusted** — P(bucket) × E[return|bucket], expanding historical averages, all tickers, equal weight
+- **Baseline** — OTM10 short-dated on all tickers, equal weight (no model)
+
+### Production Model
+
+| Model | File | Test Macro F1 | Status |
+|-------|------|---------------|--------|
+| LightGBM walk-forward | `lgbm_3class_moneyness.joblib` | 0.47 (walk-forward) / 0.59 (2025 test) | Production |
+| LSTM-CNN regularised | `lstm_cnn_best_model.pth` | 0.11 (7-class) | Dashboard only |
 
 ---
 
@@ -116,9 +126,14 @@ data/processed/
     monthly_labels.parquet       — monthly labels (1,391 rows)
 
 models/
-    lgbm_walkforward_daily.joblib
-    lgbm_tuned_3class.joblib
-    improved_model_metadata.json
+    lgbm_3class_moneyness.joblib   — production model (34 features, walk-forward trained)
+    improved_model_metadata.json   — stale (lists 27 features, model uses 34 via model.feature_name_)
+
+saved_models/
+    lstm_cnn_best_model.pth        — team's LSTM-CNN (7-class, deployed on Streamlit)
+
+src/data/
+    bucket_returns.parquet         — per-bucket realized returns for backtesting
 
 reports/figures/                 — all PNGs for /docs screen
 ```
