@@ -1666,10 +1666,12 @@ def _docs_results():
 
 
 def _docs_navbar(sections):
-    """Top navigation bar for docs with scrollspy anchors."""
+    """Top navigation bar for docs with PDF download and Trader link."""
     return NavBar(
-        *[A(name, href=f"#{sid}") for sid, name in sections],
         A("Trader", href="/trading"),
+        A(DivLAligned(UkIcon("download", height=16, width=16), Span("PDF Report", style="margin-left:0.3rem;")),
+          href="/static/AAI-590-G6-Capstone-Report.pdf", download=True,
+          style=f"color:{_IMMACULATA}; text-decoration:none;"),
         brand=A(
             DivLAligned(
                 UkIcon("book-open", height=20, width=20),
@@ -1679,23 +1681,84 @@ def _docs_navbar(sections):
             href="/",
         ),
         sticky=True,
-        uk_scrollspy_nav=True,
         cls="p-3",
         style=f"border-bottom:2px solid {_IMMACULATA};",
     )
 
 
-def _docs_sidebar(sections):
-    """Sticky left sidebar with section links for docs navigation.
+DOC_SECTIONS = [
+    ("doc-overview", "Overview"),
+    ("doc-data-pipeline", "Data Pipeline"),
+    ("doc-exploratory-analysis", "Exploratory Analysis"),
+    ("doc-feature-engineering", "Features"),
+    ("doc-lgbm-pipeline", "Tree-Based"),
+    ("doc-dl-pipeline", "Deep Learning"),
+    ("doc-results", "Results"),
+    ("doc-strategy", "Strategy"),
+]
 
-    Uses uk-scrollspy-nav so the active section highlights on scroll.
+_DOC_RENDERERS = {
+    "doc-overview": _docs_overview,
+    "doc-data-pipeline": _docs_data_pipeline,
+    "doc-exploratory-analysis": _docs_eda,
+    "doc-feature-engineering": _docs_features,
+    "doc-lgbm-pipeline": _docs_lgbm_pipeline,
+    "doc-dl-pipeline": _docs_dl_pipeline,
+    "doc-results": _docs_results,
+    "doc-strategy": _docs_strategy,
+}
+
+
+def render_doc_section(section_id: str):
+    """Render a single docs section by ID. Called by the /docs/section route.
+
+    Args:
+        section_id: One of the DOC_SECTIONS keys.
+
+    Returns:
+        Section Div, or fallback if unknown.
     """
+    renderer = _DOC_RENDERERS.get(section_id)
+    if renderer:
+        try:
+            return renderer()
+        except Exception:
+            return _fallback(section_id)
+    return _fallback("unknown section")
+
+
+def _docs_sidebar(sections, active_id: str = "doc-overview"):
+    """Sticky left sidebar with htmx-powered section links.
+
+    Clicking a link swaps the content panel without full page reload.
+    Active section is highlighted with a background color.
+
+    Args:
+        sections: List of (section_id, display_name) tuples.
+        active_id: Currently active section ID.
+    """
+    items = []
+    for sid, name in sections:
+        is_active = sid == active_id
+        style = (
+            f"color:white; text-decoration:none; display:block; padding:0.5rem 0.75rem; "
+            f"border-radius:4px; font-size:0.9rem; background:{_IMMACULATA};"
+            if is_active else
+            f"color:{_FOUNDERS}; text-decoration:none; display:block; padding:0.5rem 0.75rem; "
+            f"border-radius:4px; font-size:0.9rem;"
+        )
+        items.append(
+            Li(A(name,
+                 hx_get=f"/docs/section?id={sid}",
+                 hx_target="#docs-content",
+                 hx_swap="innerHTML",
+                 hx_push_url=f"/docs?section={sid}",
+                 style=style,
+                 ))
+        )
     return Div(
         Ul(
-            *[Li(A(name, href=f"#{sid}", style=f"color:{_FOUNDERS}; text-decoration:none; "
-                   "display:block; padding:0.4rem 0.75rem; border-radius:4px; font-size:0.9rem;"))
-              for sid, name in sections],
-            uk_scrollspy_nav="closest: li; scroll: true; offset: 80",
+            *items,
             cls="uk-nav uk-nav-default",
             style="list-style:none; padding:0;",
         ),
@@ -1704,42 +1767,56 @@ def _docs_sidebar(sections):
     )
 
 
-def docs_screen():
-    """Documentation screen: top navbar + sticky left sidebar + scrollable content.
+def docs_section_response(section_id: str):
+    """Return section content + updated sidebar (oob swap) for htmx.
+
+    The sidebar is re-rendered with the new active state and swapped
+    out-of-band so the highlight follows the user's clicks.
+
+    Args:
+        section_id: The section to render.
+
+    Returns:
+        Tuple of (section content Div, sidebar oob Div).
+    """
+    content = render_doc_section(section_id)
+    sidebar = Div(
+        _docs_sidebar(DOC_SECTIONS, active_id=section_id),
+        style="flex:0 0 200px; min-width:180px;",
+        id="docs-sidebar",
+        hx_swap_oob="true",
+    )
+    return content, sidebar
+
+
+def docs_screen(section: str = "doc-overview"):
+    """Documentation screen: top navbar + sticky sidebar + single section content.
+
+    Only one section is rendered at a time. Sidebar links use htmx to swap
+    the content panel without full page reload.
+
+    Args:
+        section: Initial section to display.
 
     Returns:
         Div with docs layout.
     """
     try:
-        sections = [
-            ("doc-overview", "Overview"),
-            ("doc-data-pipeline", "Data Pipeline"),
-            ("doc-exploratory-analysis", "Exploratory Analysis"),
-            ("doc-feature-engineering", "Features"),
-            ("doc-lgbm-pipeline", "Tree-Based"),
-            ("doc-dl-pipeline", "Deep Learning"),
-            ("doc-results", "Results"),
-            ("doc-strategy", "Strategy"),
-        ]
+        initial_content = render_doc_section(section)
         return Div(
-            _docs_navbar(sections),
+            _docs_navbar(DOC_SECTIONS),
             Div(
-                # Left sidebar (sticky)
+                # Left sidebar (sticky, swapped oob on section change)
                 Div(
-                    _docs_sidebar(sections),
+                    _docs_sidebar(DOC_SECTIONS, active_id=section),
                     style="flex:0 0 200px; min-width:180px;",
+                    id="docs-sidebar",
                 ),
-                # Right content (scrollable)
+                # Right content (single section, swapped via htmx)
                 Div(
-                    _docs_overview(),
-                    _docs_data_pipeline(),
-                    _docs_eda(),
-                    _docs_features(),
-                    _docs_lgbm_pipeline(),
-                    _docs_dl_pipeline(),
-                    _docs_results(),
-                    _docs_strategy(),
+                    initial_content,
                     style="flex:1; min-width:0;",
+                    id="docs-content",
                 ),
                 style="display:flex; gap:1.5rem;",
                 cls="px-4 py-4",

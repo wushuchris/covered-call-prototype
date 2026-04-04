@@ -284,6 +284,55 @@ Merged main branch (team's work) into carlos. Resolved conflicts in .gitignore a
 
 **Next session priority**: MLflow tab (serve experiment data on Pi), budget scoring redesign (make budget meaningful), notebook backtest strategy integration
 
+### 2026-04-04 — Session 5: Ship Day — Maturity Returns, MLflow, Model Info, Docs Overhaul
+
+Ship date session. Focused on closing gaps in the backtesting pipeline, wiring MLflow experiment tracking, cleaning up the model comparison UI, and restructuring docs into a single-page layout.
+
+**Maturity-aware bucket returns:**
+- Identified that the maturity dimension (SHORT/LONG) was half-wired: the scoring engine (TC + delta-hedge) filtered options by maturity, but `bucket_returns.parquet` only had 3 moneyness-only return columns — realized P&L couldn't distinguish SHORT from LONG
+- Rebuilt notebook `05b_bucket_returns.ipynb` to produce 9 return columns: 3 moneyness-only (`return_ATM`, `return_OTM5`, `return_OTM10`) + 6 moneyness×maturity (`return_ATM_SHORT`, `return_ATM_LONG`, etc.)
+- Updated `backtesting.py:_compute_monthly_return()` to use full `model_bucket` (e.g. `return_ATM_SHORT`) for the 3 preset strategies
+- Argmax, Risk-Adjusted, and Baseline remain on moneyness-only columns — clean separation between strategies that use maturity and those that don't
+- Maturity columns have more nulls (363 vs 76 for ATM) — expected since DTE split creates sparser coverage; positions with missing maturity data are skipped and budget redistributed
+- Cleared cache and reran backtests for all/2024/2025 — Risk-Adjusted still best Sharpe (2.69), preset strategies shifted to reflect honest maturity-aware returns
+
+**MLflow experiment tracking (new):**
+- Built `src/inference/mlflow_reader.py` — scans `mlruns/` flat-file backend directly (YAML + text file parsing), no MLflow dependency
+- Deduplicates 17 runs → 4 unique models: XGBoost-Baseline, LSTM-CNN-Regularised, LSTM-CNN-Best, PatchTST-Transformer
+- Each run has metrics (val/test F1, accuracy, balanced accuracy), params (hyperparameters), and artifacts (confusion matrix PNGs, ROC curve PNGs)
+- Reports are all 0 bytes (empty) — not surfaced
+- Added `GET /mlflow_experiments` endpoint on inference service
+- Tab 3 (MLflow) now lazy-loads on tab switch via `hx-trigger="intersect once"`
+- Table columns: Model, Variant, Classes, Features, Val F1, Test F1, Test Acc, Test Bal. Acc, Params, Plots
+- Params column: settings icon → modal with hyperparameter table per model
+- Plots column: grid icon → confusion matrix modal, trending-up icon → ROC curves modal
+- Added `/mlruns/` static mount on UI service to serve artifact PNGs
+- LGBM production model appended as a 5th row via `model.py:get_lgbm_experiment_info()` — computes live test metrics from feature store + extracts hyperparameters from model object
+- Disclaimer: "Deep learning and XGBoost runs tracked via MLflow (7-class task). LGBM 3-class production model tracked separately via walk-forward validation — included for comparison."
+
+**Model Performance tab cleanup:**
+- Dropped LSTM-CNN 7-Class column from Model Comparison — was hardcoded static values from 2024-2025 test set only, misleading when user applied year/sample filters
+- Renamed "Model Comparison" → "Model Information" — single column showing live LGBM metrics that respond to filters
+
+**Documentation overhaul:**
+- Added PDF download button to docs navbar — `AAI-590-G6-Capstone-Report.pdf` copied from `persistence_agent/` to `src/ui/static/`, served with `download=True` attribute
+- Restructured from infinite scroll to single-page section rendering:
+  - Sidebar links use `hx-get="/docs/section?id=..."` targeting `#docs-content` — swaps only the content panel
+  - Sidebar re-renders via `hx-swap-oob` with active section highlighted (white on Immaculata blue)
+  - `hx-push-url` updates browser URL to `/docs?section=doc-xyz` for deep linking and back/forward
+  - `/docs` route accepts `?section=` query param for direct section access
+  - Removed scrollspy from navbar and sidebar — not needed with single-section display
+  - Removed section anchor links from navbar — only Trader link and PDF download remain
+- Section map (`DOC_SECTIONS` + `_DOC_RENDERERS`) enables route-level section rendering without duplicating logic
+
+**LSTM-CNN remote endpoint (investigated, deferred):**
+- Teammate's deployment at `http://98.93.2.225:8501` (Streamlit) / `:8000` (FastAPI) — connection timed out, likely down
+- FastAPI backend expects `POST /predict/csv` with 35-feature CSV/parquet + 50-day rolling window
+- Integration would require slicing raw feature data from modeling_data.parquet and POSTing to remote endpoint
+- Deferred — single model inference kept as-is
+
+**Next session priority**: Docs content revamp (update text for new strategies, add missing figures), LSTM-CNN remote endpoint integration when teammate confirms API is live
+
 ---
 
 ## Proposed Dataset Redesign (TEAM DECISION REQUIRED)

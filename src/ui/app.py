@@ -24,7 +24,7 @@ from monsterui.all import *
 from src.ui.ui_components import (
     launcher_screen, trading_screen, inference_results_card,
     batch_results_card, backtest_results_card, model_performance_card,
-    mlflow_experiments_card, docs_screen, TICKERS,
+    mlflow_experiments_card, docs_screen, docs_section_response, TICKERS,
 )
 from src.ui.ui_handler import (
     handle_inference_call, handle_batch_inference,
@@ -313,13 +313,25 @@ async def post(year: str = "all", budget: str = "100000"):
 
 @rt("/docs")
 @log_call(logger)
-def get():
-    """Serve the documentation screen."""
+def get(section: str = "doc-overview"):
+    """Serve the documentation screen with a specific section active."""
     try:
-        return docs_screen()
+        return docs_screen(section=section)
     except Exception as e:
         logger.error(f"Error rendering docs: {e}")
         return Div(P("Error loading documentation.", cls="uk-text-danger"))
+
+
+@rt("/docs/section")
+@log_call(logger)
+def get(id: str = "doc-overview"):
+    """Return a single docs section for htmx swap + sidebar oob update."""
+    try:
+        content, sidebar = docs_section_response(id)
+        return content, sidebar
+    except Exception as e:
+        logger.error(f"Error rendering docs section: {e}")
+        return Div(P("Error loading section.", cls="uk-text-danger"))
 
 
 # if main.pyy launch the server, it is worth mentioning that the way we are going to be serving the service (there is going to be a parallel
