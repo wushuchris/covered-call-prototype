@@ -1129,43 +1129,33 @@ def _docs_footer():
 _FIG = "/figures"
 
 
-def _doc_fig(filename: str, caption: str = ""):
-    """Render a figure as a clickable modal trigger (Lucide icon + caption).
+def _doc_fig(filename: str, caption: str = "", max_width: str = "560px"):
+    """Render a figure as an inline image with caption.
 
-    Clicking opens a full-size modal with the image.
+    Args:
+        filename: Image filename in reports/figures/.
+        caption: Caption text shown below the image.
+        max_width: CSS max-width constraint.
+
+    Returns:
+        Div with constrained image and optional caption.
     """
-    modal_id = f"fig-{filename.replace('.', '-').replace('_', '-')}"
     return Div(
-        # Trigger — icon + caption text
-        A(
-            Div(
-                UkIcon("search", height=28, width=28),
-                P(caption, cls=(TextT.sm,), style="margin-top:0.25rem;") if caption else "",
-                style="display:flex; flex-direction:column; align-items:center; text-align:center;",
-            ),
-            href=f"#{modal_id}",
-            uk_toggle="",
-            style=f"cursor:pointer; color:{_IMMACULATA}; text-decoration:none;",
-        ),
-        # Modal — full-size image
-        Modal(
-            Img(src=f"{_FIG}/{filename}", alt=caption, style="width:100%; border-radius:6px;"),
-            header=caption if caption else filename,
-            id=modal_id,
-            dialog_cls="uk-modal-dialog-large",
-        ),
+        Img(src=f"{_FIG}/{filename}", alt=caption,
+            style=f"max-width:{max_width}; width:100%; border-radius:8px; "
+                  f"border:1px solid {_TORERO}40;"),
+        P(caption, cls=TextPresets.muted_sm,
+          style="text-align:center; margin-top:0.5rem; font-style:italic;") if caption else "",
+        style="margin:1rem 0; text-align:center;",
     )
 
 
 def _doc_row(text_el, fig_el):
-    """Two-column row: text left, modal icon right. Horizontal divider below."""
+    """Two-column row: text left, inline figure right."""
     return Div(
-        Div(
-            Div(text_el, style="flex:1;"),
-            Div(fig_el, style="flex:1; display:flex; align-items:center; justify-content:center;"),
-            style="display:flex; gap:1.5rem;",
-        ),
-        style=f"border-bottom:1px solid {_TORERO}; padding-bottom:0.75rem; margin-top:0.75rem;",
+        Div(text_el, style="flex:1; min-width:0;"),
+        Div(fig_el, style="flex:1; min-width:0; display:flex; align-items:center; justify-content:center;"),
+        style=f"display:flex; gap:1.5rem; padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
     )
 
 
@@ -1192,26 +1182,38 @@ def _doc_columns(left, right):
 def _docs_overview():
     """Section 1: Project overview."""
     return _doc_section("doc-overview", "Overview",
-        P("This system uses machine learning to optimize covered call option selling across a universe of 10 large-cap "
-          "US equities. Given a stock and a monthly decision date, the model predicts which moneyness bucket "
-          "(ATM, OTM5%, or OTM10%) is most likely to yield the highest realized covered call return."),
-        P("Two modeling approaches were developed in parallel: a LightGBM pipeline with walk-forward validation "
-          "on a simplified 3-class target, and a deep learning pipeline (LSTM-CNN, PatchTST) on the full 7-class "
-          "moneyness-maturity space. Both are documented here.", cls="mt-2"),
+        P("Covered call strategies are widely used by institutional and retail investors to enhance portfolio "
+          "income while modestly reducing downside volatility. The strategy involves holding an underlying equity "
+          "position while selling call options against it — generating premium income in exchange for limiting "
+          "potential upside. Although conceptually straightforward, the selection of strike price and time to "
+          "expiration introduces a complex trade-off between premium capture, capital appreciation, and "
+          "assignment risk."),
+        P("This project investigates whether machine learning can improve covered call decision making by "
+          "dynamically selecting the optimal strike and maturity bucket based on observable financial and market "
+          "features. The problem is framed as a multi-class classification task over predefined strategy buckets, "
+          "and the model recommends the contract structure expected to maximize realized risk-adjusted return.", cls="mt-2"),
+        P("Two parallel modeling pipelines were developed: a LightGBM tree-based pipeline with walk-forward "
+          "validation on a simplified 3-class moneyness target (production), and a deep learning pipeline "
+          "(LSTM-CNN with Bahdanau attention, PatchTST transformer) on the full 7-class moneyness-maturity "
+          "space (experimental). Both are documented here.", cls="mt-2"),
         Card(
             Div(
                 Div(P(Strong("Universe"), cls=TextPresets.muted_sm),
                     P("AAPL, AMZN, AVGO, GOOG, GOOGL, META, MSFT, NVDA, TSLA, WMT")),
                 Div(P(Strong("Decision Frequency"), cls=TextPresets.muted_sm),
-                    P("Monthly (last trading day of each month)")),
+                    P("Monthly — last trading day of each month")),
                 Div(P(Strong("Moneyness Buckets"), cls=TextPresets.muted_sm),
                     P("ATM (delta 0.45-0.60), OTM5 (0.30-0.45), OTM10 (0.15-0.30)")),
                 Div(P(Strong("Maturity Buckets"), cls=TextPresets.muted_sm),
                     P("SHORT (DTE 7-45), LONG (DTE 46-120)")),
+                Div(P(Strong("Data Period"), cls=TextPresets.muted_sm),
+                    P("2015-2025 — daily prices, options chains, quarterly fundamentals")),
+                Div(P(Strong("Data Sources"), cls=TextPresets.muted_sm),
+                    P("Alpha Vantage API (equities, options, fundamentals) + FRED (macro indicators)")),
                 Div(P(Strong("LightGBM Pipeline"), cls=TextPresets.muted_sm),
-                    P("3-class moneyness + IV-rank maturity rule (production)")),
+                    P("3-class moneyness + IV-rank maturity rule — production model (0.47 walk-forward F1)")),
                 Div(P(Strong("Deep Learning Pipeline"), cls=TextPresets.muted_sm),
-                    P("7-class LSTM-CNN + PatchTST (experimental)")),
+                    P("7-class LSTM-CNN + PatchTST — experimental (0.11 best test F1)")),
                 style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;",
             ),
             header=H4("System Summary", style=f"color:{_IMMACULATA};"),
@@ -1223,69 +1225,110 @@ def _docs_overview():
 def _docs_data_pipeline():
     """Section 2: Data sources and cleaning."""
     return _doc_section("doc-data-pipeline", "Data Pipeline",
-        P("Raw data is pulled from Alpha Vantage APIs and cached in an S3 mirror. The pipeline processes six data sources "
-          "through standardization, deduplication, type conversion, and quality validation."),
-        P("Options data represents monthly snapshots of the full options board — all listed contracts at all strikes "
-          "and expirations, not executed trades. For AAPL this means ~900 call contracts per snapshot; for smaller names "
-          "like AVGO, ~200. Cleaning reduces options from 3.2M to 1.1M contracts by filtering to reasonable delta "
-          "(0.10-0.70) and DTE (7-150 days) ranges.", cls="mt-2"),
+        P("The modeling dataset integrates multiple sources of financial and market data obtained through the "
+          "Alpha Vantage API, spanning 2015 through 2025 for ten publicly traded companies. Raw data is cached "
+          "in an S3 mirror for reproducibility."),
         Card(
             Div(
-                Div(P(Strong("Daily Prices")), P("52,486 rows — OHLCV + dividends + splits (2000-2025)", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Daily Prices")), P("47,350 observations — OHLCV, adjusted close, dividends, stock splits", cls=TextPresets.muted_sm)),
                 Div(P(Strong("Income Statements")), P("781 quarterly reports — revenue, margins, net income", cls=TextPresets.muted_sm)),
                 Div(P(Strong("Balance Sheets")), P("773 quarterly reports — assets, liabilities, equity", cls=TextPresets.muted_sm)),
                 Div(P(Strong("Cash Flow")), P("778 quarterly reports — operating cash flow, capex", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Options")), P("1.1M contracts after cleaning (from 3.2M raw) — full monthly snapshots", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Overview")), P("10 companies — sector, industry, beta, dividend yield", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Options Chains")), P("927K unique contracts after dedup (from 1.85M raw) — monthly board snapshots", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Company Overview")), P("10 companies — sector, industry, shares outstanding, equity beta", cls=TextPresets.muted_sm)),
                 style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;",
             ),
             header=H4("Data Sources", style=f"color:{_IMMACULATA};"),
             cls="mt-2",
         ),
+        H4("Cleaning & Preprocessing", style=f"color:{_IMMACULATA}; margin-top:1.5rem;"),
+        P("Options data represents monthly snapshots of the full options board — all listed contracts at all strikes "
+          "and expirations, not executed trades. For AAPL this means ~900 call contracts per snapshot; for smaller "
+          "names like AVGO, ~200. After deduplication from repeated API responses, the dataset was reduced from "
+          "1.85M to 927K unique contracts. Of these, only ~52K (16.2%) fell within the strike and maturity ranges "
+          "relevant to the strategy design (delta 0.10-0.70, DTE 7-150 days)."),
+        P("Missing data in financial statements ranged from 27% to 56% depending on the variable, but most "
+          "corresponded to fields not applicable for certain companies rather than true gaps. Debt-to-equity was "
+          "the only engineered feature with missing values (~1% of observations), imputed via median. Financial "
+          "ratios were clipped to economically reasonable ranges — P/E to [-100, 500], FCF yield to [-1, 1] — "
+          "to remove distortions from near-zero denominators.", cls="mt-2"),
+        P("Quarterly fundamentals were joined to daily data via as-of merge, matching on the most recent fiscal "
+          "reporting date to prevent lookahead bias. Observations prior to January 2016 were removed to ensure "
+          "sufficient history for rolling window initialization (200-day moving averages). The final modeling "
+          "dataset contains 28 engineered features: 15 technical indicators, 9 fundamental variables, and "
+          "4 valuation metrics.", cls="mt-2"),
     )
 
 
 def _docs_eda():
     """Section 3: Exploratory analysis."""
     return _doc_section("doc-exploratory-analysis", "Exploratory Analysis",
+        P("Exploratory data analysis revealed substantial diversity in price behavior, volatility dynamics, "
+          "and options characteristics across the ticker universe. These patterns directly inform feature "
+          "selection and model design."),
+        # Feature correlations
         _doc_row(
             Div(
-                P("Comprehensive analysis of price behavior, volatility regimes, fundamental trends, "
-                  "and options data characteristics across the 10-ticker universe."),
-                P("Highest volatility: TSLA (54%), NVDA (52%), AMZN (42%). Best Sharpe ratios: "
-                  "AVGO (1.13), TSLA (0.92), GOOGL (0.90). Highest correlated pair: GOOGL-GOOG (0.994).", cls="mt-2"),
-                P("Options data has average implied volatility of 49.49%. META has the shortest "
-                  "history (since Aug 2021); AAPL, AMZN, GOOGL, MSFT, NVDA, WMT have data since Feb 2008.", cls="mt-2"),
+                H4("Feature Correlations", style=f"color:{_IMMACULATA};"),
+                P("Several highly correlated feature pairs were identified: operating margin and net margin "
+                  "correlate at ~0.95, 21-day momentum and price/SMA50 ratio at ~0.88, and short-term "
+                  "volatility measures (10d and 21d) at ~0.82."),
+                P("Volatility features cluster together while fundamentals form a separate block, confirming "
+                  "the feature set captures distinct informational dimensions. These correlations informed "
+                  "regularization and feature selection to avoid multicollinearity.", cls="mt-2"),
             ),
-            _doc_fig("feature_correlations.png", "Feature correlation matrix — volatility features cluster, fundamentals form a separate block."),
+            _doc_fig("feature_correlations.png", "Feature correlation matrix"),
         ),
+        # Bucket boundaries
         _doc_row(
             Div(
-                P("Bucket boundary analysis uses delta for moneyness and DTE for maturity. "
-                  "The 9-bucket structure (3 moneyness x 3 maturity) captures 87,194 contracts — 15.5% of all calls."),
-                P("Sufficient coverage confirmed for all 10 tickers, though some long-dated ATM buckets "
-                  "have lower liquidity (e.g. AVGO ATM_DTE90: 55 contracts, META ATM_DTE90: 41).", cls="mt-2"),
+                H4("Bucket Boundaries", style=f"color:{_IMMACULATA};"),
+                P("Option contracts are segmented into strategy buckets using delta for moneyness "
+                  "(ATM: 0.45-0.60, OTM5: 0.30-0.45, OTM10: 0.15-0.30) and DTE for maturity "
+                  "(30d: 7-45, 60d: 46-75, 90d: 76-120)."),
+                P("Most contracts concentrate in shorter maturities and slightly out-of-the-money strikes, "
+                  "which aligns with common covered call implementations that maximize premium income "
+                  "while limiting assignment risk.", cls="mt-2"),
             ),
-            _doc_fig("bucket_analysis.png", "Delta/DTE distributions with bucket boundaries and per-ticker coverage."),
+            _doc_fig("bucket_analysis.png", "Delta and DTE distributions with bucket boundaries"),
         ),
+        # Label distribution
         _doc_row(
-            P("Best moneyness distribution by year and ticker. ATM dominates across all years and most tickers, "
-              "with OTM5 and OTM10 appearing more in volatile periods. WMT and MSFT skew heavily toward ATM; "
-              "NVDA and TSLA show more OTM diversity. Class imbalance is handled via inverse-frequency "
-              "class weights during training."),
-            _doc_fig("label_distribution.png", "Best moneyness by year and by ticker — ATM dominates."),
+            Div(
+                H4("Optimal Bucket Distribution", style=f"color:{_IMMACULATA};"),
+                P("The best moneyness bucket (highest realized covered call return) varies by year, ticker, "
+                  "and market conditions. ATM dominates across all years and most tickers."),
+                P("Class imbalance is significant — ATM accounts for ~45% of labels, requiring "
+                  "inverse-frequency class weights during training. WMT and MSFT skew heavily toward ATM; "
+                  "NVDA and TSLA show more OTM diversity.", cls="mt-2"),
+            ),
+            _doc_fig("label_distribution.png", "Best moneyness by year and by ticker"),
         ),
+        # Vol regime
         _doc_row(
-            P("Best bucket shifts between volatility regimes — ATM dominates in both low and high vol, "
-              "but long-dated buckets shrink in high vol as the market prices in uncertainty. "
-              "This motivates the IV-rank maturity rule used in production."),
-            _doc_fig("label_by_vol_regime.png", "Best bucket by vol regime — long-dated shrinks in high vol."),
+            Div(
+                H4("Volatility Regimes", style=f"color:{_IMMACULATA};"),
+                P("The optimal bucket shifts between volatility regimes. ATM dominates in both low and high "
+                  "vol environments, but long-dated buckets shrink in high vol as the market prices in "
+                  "uncertainty more aggressively."),
+                P("This pattern motivates the IV-rank maturity rule used in production: when implied "
+                  "volatility rank exceeds 0.5, sell shorter-dated options to capture elevated premium "
+                  "quickly; otherwise, sell longer-dated options to collect more time value.", cls="mt-2"),
+            ),
+            _doc_fig("label_by_vol_regime.png", "Best bucket by volatility regime"),
         ),
+        # Temporal coverage
         _doc_row(
-            P("Best bucket distribution shifts over time as more tickers enter the options market post-2010. "
-              "ATM buckets (DTE30/DTE60) dominate across all years. Coverage peaks in 2022-2023 with the "
-              "full 10-ticker universe."),
-            _doc_fig("label_temporal.png", "Best bucket over time — coverage grows post-2010."),
+            Div(
+                H4("Temporal Coverage", style=f"color:{_IMMACULATA};"),
+                P("Label distribution evolves over time as more tickers enter the options market. Coverage "
+                  "peaks in 2022-2023 with the full universe available. ATM buckets (DTE30/DTE60) dominate "
+                  "across all years."),
+                P("The dataset captures multiple major market regimes: the post-2016 bull market, the 2020 "
+                  "pandemic crash and recovery, the 2022 rate-hike selloff, and the 2023-2024 AI rally. "
+                  "This diversity is essential for evaluating model robustness.", cls="mt-2"),
+            ),
+            _doc_fig("label_temporal.png", "Best bucket distribution over time"),
         ),
     )
 
@@ -1293,48 +1336,65 @@ def _docs_eda():
 def _docs_features():
     """Section 4: Feature engineering — two-column comparison of both pipelines."""
     return _doc_section("doc-feature-engineering", "Feature Engineering",
-        P("Both pipelines share the same raw data but engineer different feature sets and targets. "
-          "Features are computed at monthly decision points; quarterly fundamentals are forward-filled "
-          "via merge_asof to avoid lookahead bias."),
+        P("Both pipelines share the same raw data sources but engineer different feature sets and targets. "
+          "All features are computed at monthly decision points from daily price data and quarterly "
+          "fundamentals, with merge_asof joins to prevent lookahead bias."),
         _doc_columns(
             # Left: LGBM pipeline
             Div(
                 H4("LightGBM Pipeline", style=f"color:{_IMMACULATA};"),
-                P(Strong("27 + 8 IV features"), cls="mt-1"),
-                P(Strong("Technical (15)"), cls="mt-2"),
-                P("Volatility (10d/21d/63d), momentum (5d/21d/63d), price-to-SMA ratios, "
-                  "SMA crossovers, drawdowns, volume ratio, vol regime", cls=TextPresets.muted_sm),
-                P(Strong("Fundamental (10)"), cls="mt-2"),
-                P("Margins, revenue/earnings growth, debt-to-equity, cash ratio, ROE, ROA, FCF", cls=TextPresets.muted_sm),
-                P(Strong("Implied Volatility (8)"), cls="mt-2"),
+                P(Strong("27 base + 8 IV = 34 features (production)"), cls="mt-1"),
+                P(Strong("Technical (18)"), cls="mt-2"),
+                P("Volatility (5d/21d/63d), momentum (5d/21d/63d), price-to-SMA (21/50/200), "
+                  "SMA crossovers (21>50, 50>200), drawdowns (63d/252d), volume ratio, RSI-14, "
+                  "Bollinger width, high-vol regime flag", cls=TextPresets.muted_sm),
+                P(Strong("Fundamental (9)"), cls="mt-2"),
+                P("Gross/operating/net margin, revenue growth YoY, earnings growth YoY, "
+                  "debt-to-equity, cash ratio, ROE, ROA", cls=TextPresets.muted_sm),
+                P(Strong("Implied Volatility (8, added in walk-forward)"), cls="mt-2"),
                 P("IV mean/median/skew, short/long-term IV, IV term structure, "
-                  "IV rank, IV month-over-month change", cls=TextPresets.muted_sm),
+                  "IV rank (percentile), IV month-over-month change", cls=TextPresets.muted_sm),
                 P(Strong("Target: 3-class moneyness"), cls="mt-3"),
-                P("ATM / OTM5 / OTM10. Maturity selected post-hoc by IV-rank rule.", cls=TextPresets.muted_sm),
+                P("ATM / OTM5 / OTM10 — maturity selected post-hoc by IV-rank rule", cls=TextPresets.muted_sm),
             ),
             # Right: DL pipeline
             Div(
                 H4("Deep Learning Pipeline", style=f"color:{_IMMACULATA};"),
-                P(Strong("Top 35 features (RF-selected)"), cls="mt-1"),
+                P(Strong("Top 35 features (RF importance-selected)"), cls="mt-1"),
                 P(Strong("Price & Returns"), cls="mt-2"),
                 P("Open, High, Low, Close, Volume, daily/weekly/monthly returns", cls=TextPresets.muted_sm),
                 P(Strong("Technical"), cls="mt-2"),
                 P("Rolling volatility (5/20/60d), momentum, RSI, MACD, Bollinger Bands", cls=TextPresets.muted_sm),
                 P(Strong("Valuation & Profitability"), cls="mt-2"),
                 P("P/E, P/S, EV/EBITDA, Price/Book, margins, ROA, ROE, leverage ratios", cls=TextPresets.muted_sm),
+                P(Strong("Input"), cls="mt-2"),
+                P("50-day sliding window sequences (35 features x 50 timesteps)", cls=TextPresets.muted_sm),
                 P(Strong("Target: 7-class buckets"), cls="mt-3"),
                 P("ATM_30, ATM_60, ATM_90, OTM5_30, OTM5_60_90, OTM10_30, OTM10_60_90", cls=TextPresets.muted_sm),
             ),
         ),
-        # Shared label construction — no figure, text only
+        # Feature importance figure
+        _doc_row(
+            Div(
+                H4("Feature Importance Evolution", style=f"color:{_IMMACULATA};"),
+                P("Feature importance rankings shifted dramatically across model stages. In baselines, "
+                  "raw price-level features (adjusted_close, volume) leaked information and were removed. "
+                  "Fundamentals then dominated: debt_to_equity, cash_ratio, gross_margin."),
+                P("After adding IV features in the walk-forward stage, implied volatility measures "
+                  "(iv_change, iv_rank, iv_mean, iv_std) consistently occupied the top 4 positions — "
+                  "confirming that volatility is the central signal for covered call optimization.", cls="mt-2"),
+            ),
+            _doc_fig("feature_importance_comparison.png", "Feature importance across model stages"),
+        ),
+        # Label construction
         Div(
-            H4("Label Construction (Shared)", style=f"color:{_IMMACULATA};"),
-            P("Both pipelines construct labels by computing realized covered call payoffs for every contract "
-              "in each bucket. For each (ticker, month), the bucket with the highest realized return "
-              "becomes the ground truth label."),
-            P("Payoff = premium received + capped stock P&L (capped at strike if assigned). "
-              "Class weights are computed via inverse-frequency to handle imbalance.", cls="mt-2"),
-            style=f"border-bottom:1px solid {_TORERO}; padding-bottom:0.75rem; margin-top:0.75rem;",
+            H4("Label Construction", style=f"color:{_IMMACULATA};"),
+            P("Labels are constructed by computing realized covered call payoffs for every contract in each "
+              "bucket. For each (ticker, month), the bucket with the highest realized return becomes the "
+              "ground truth label. Payoff = premium received + capped stock P&L (capped at strike if assigned)."),
+            P("3-class distribution: ATM 62%, OTM5 17%, OTM10 21% (3.6x imbalance ratio). "
+              "Class weights computed via inverse frequency: ATM 0.54, OTM5 1.94, OTM10 1.59.", cls="mt-2"),
+            style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
     )
 
@@ -1344,89 +1404,88 @@ def _docs_lgbm_pipeline():
     return _doc_section("doc-lgbm-pipeline", "Tree-Based Pipeline (3-Class)",
         P("This pipeline reformulates the problem as a simpler 3-class moneyness prediction "
           "(ATM / OTM5 / OTM10), decoupling maturity selection into a post-hoc IV-rank rule. "
-          "Three tree-based architectures were evaluated — Random Forest, XGBoost, and LightGBM — "
-          "each progressively refined through Optuna hyperparameter tuning and walk-forward validation. "
-          "LightGBM with walk-forward annual retraining emerged as the production model.", cls="mb-2"),
+          "Three tree-based models were evaluated — Random Forest, XGBoost, and LightGBM — each "
+          "progressively refined through Optuna tuning and walk-forward validation. "
+          "LightGBM with walk-forward annual retraining emerged as the production model."),
         # Baselines
         _doc_row(
             Div(
                 H4("Random Forest & XGBoost Baselines", style=f"color:{_IMMACULATA};"),
-                P("Both models trained on the 3-class moneyness target with 80/20 time-based split. "
-                  "21,395 training rows, 7,878 test rows, 27 features engineered from daily price "
-                  "data and quarterly fundamentals."),
+                P("Both models trained on 27 features with 80/20 time-based split "
+                  "(21,395 train / 7,878 test rows)."),
                 P("Random Forest: 48.5% accuracy / 0.333 macro F1. Heavily biased toward ATM — "
-                  "misclassifies 1,778 OTM10 samples as ATM. Only 45 correct OTM5 predictions out of "
-                  "2,266 actual OTM5 instances.", cls="mt-2"),
+                  "misclassifies 1,778 OTM10 samples as ATM. Only 45 correct OTM5 predictions "
+                  "out of 2,266 actual OTM5 instances.", cls="mt-2"),
                 P("XGBoost: 48.0% accuracy / 0.359 macro F1. Slightly better OTM5 recall (198 correct) "
-                  "but still dominated by ATM predictions. Top features at this stage: debt_to_equity, "
-                  "cash_ratio, gross_margin, revenue_growth_yoy — fundamentals dominate after "
-                  "pruning leaky price-level features (adjusted_close, volume).", cls="mt-2"),
+                  "but still dominated by ATM predictions. Top features: debt_to_equity, cash_ratio, "
+                  "gross_margin — fundamentals dominate after pruning leaky price-level features.", cls="mt-2"),
             ),
-            _doc_fig("baseline_confusion.png", "RF and XGB 3-class confusion matrices — both default to ATM."),
-        ),
-        Div(
-            P("Feature importance analysis at the baseline stage revealed that raw price-level features "
-              "(adjusted_close, volume) were leaking information. After removing them, fundamental "
-              "features took over the importance rankings. This informed the feature selection for "
-              "subsequent stages."),
-            style=f"border-bottom:1px solid {_TORERO}; padding-bottom:0.75rem; margin-top:0.75rem;",
+            _doc_fig("baseline_confusion.png", "RF and XGB confusion matrices — both default to ATM"),
         ),
         # Optuna-tuned
         _doc_row(
             Div(
                 H4("Optuna Hyperparameter Tuning", style=f"color:{_IMMACULATA};"),
-                P("All three tree-based models (RF, XGBoost, LightGBM) were tuned via Optuna with "
-                  "20 trials each, using TimeSeriesSplit cross-validation to respect temporal ordering. "
-                  "Balanced class weights applied to all models to address ATM dominance."),
-                P("Random Forest: 50.0% accuracy / 0.338 macro F1. XGBoost: 50.4% / 0.342. "
-                  "LightGBM: 48.4% / 0.349. Tuning provided only marginal improvement over baselines — "
-                  "all three remained near random-level F1 (0.333) on time-split evaluation.", cls="mt-2"),
-                P("LightGBM achieved the highest macro F1 despite lowest raw accuracy, indicating better "
-                  "minority-class recall. Key tuned hyperparameters: n_estimators=300, max_depth=8, "
-                  "learning_rate=0.05, num_leaves=50, subsample=0.8. Top features shifted to volatility "
-                  "measures: vol_63d, vol_21d, bb_width.", cls="mt-2"),
+                P("All three models tuned via Optuna (20 trials each) with TimeSeriesSplit "
+                  "cross-validation and balanced class weights to address ATM dominance."),
+                P("RF: 50.0% / 0.338 F1. XGB: 50.4% / 0.342. LGBM: 48.4% / 0.349. "
+                  "Marginal improvement — all near random-level F1 (0.333). The limitation "
+                  "at this stage was the feature set, not the model architecture.", cls="mt-2"),
+                P("LGBM achieved highest macro F1 despite lowest accuracy — better minority-class "
+                  "recall. Key params: n_estimators=300, max_depth=8, lr=0.05, num_leaves=50. "
+                  "Top features shifted to volatility: vol_63d, vol_21d, bb_width.", cls="mt-2"),
             ),
-            _doc_fig("improved_confusion_matrices.png", "Tuned RF, XGB, and LGBM confusion matrices — LGBM shows best minority-class balance."),
+            _doc_fig("improved_confusion_matrices.png", "Tuned RF, XGB, and LGBM — LGBM best minority-class balance"),
         ),
         # Walk-forward (production)
         _doc_row(
             Div(
                 H4("Walk-Forward Validation (Production)", style=f"color:{_IMMACULATA};"),
-                P("The critical breakthrough came from walk-forward annual retraining: for each year N, "
-                  "the model trains on all data from years 1 to N-1 and predicts year N. This expanding "
-                  "window approach eliminates future leakage and simulates real-world deployment conditions."),
-                P("Eight implied volatility features were added at this stage (IV mean, median, skew, "
-                  "short/long-term IV, term structure, IV rank, IV change), computed from the full options "
-                  "board. These immediately dominated the feature importance rankings.", cls="mt-2"),
-                P("Overall macro F1 = 0.468 — a significant jump from the 0.349 of the tuned model. "
+                P("The breakthrough came from walk-forward annual retraining: for each year N, "
+                  "train on all data from years 1 to N-1, predict year N. This expanding-window "
+                  "approach eliminates future leakage and simulates deployment conditions."),
+                P("Eight IV features were added at this stage (IV mean, median, skew, short/long-term IV, "
+                  "term structure, IV rank, IV change), computed from the full options board. These "
+                  "immediately dominated feature importance, pushing total features from 27 to 34.", cls="mt-2"),
+                P("Overall macro F1 = 0.468 — a significant jump from the tuned model's 0.349. "
                   "Strong ATM recall (13,472 correct), OTM10 reasonably separated (1,850 of 4,557). "
-                  "OTM5 remains the hardest class to predict.", cls="mt-2"),
-                P("Maturity rule: IV rank > 0.5 → sell SHORT (capture elevated premium quickly), "
-                  "IV rank ≤ 0.5 → sell LONG (collect more time value). This decoupled approach avoids "
-                  "the curse of dimensionality that hampered 7-class joint prediction.", cls="mt-2"),
+                  "OTM5 remains the hardest class.", cls="mt-2"),
             ),
-            _doc_fig("walkforward_confusion_matrix.png", "Walk-forward confusion matrix — IV features enabled a significant F1 jump."),
+            _doc_fig("walkforward_confusion_matrix.png", "Walk-forward confusion matrix — IV features drive F1 from 0.35 to 0.47"),
         ),
         _doc_row(
-            P("Walk-forward F1 varies by year — peaks at 0.60 in 2019, sustained above 0.50 from "
-              "2015-2021, dips to ~0.32 in 2023 (a regime-shift year with rapid rate hikes). "
-              "The model beats the random baseline (0.333) in most years. IV features (iv_change, "
-              "iv_rank, iv_mean, iv_std) consistently occupy the top 4 importance positions across "
-              "all walk-forward folds."),
-            _doc_fig("walkforward_yearly_f1.png", "Macro F1 by year — consistently above random baseline, with year-to-year variation."),
+            Div(
+                H4("Yearly Performance", style=f"color:{_IMMACULATA};"),
+                P("Walk-forward F1 varies by year — peaks at 0.60 in 2019, sustained above 0.50 "
+                  "from 2015-2021, dips to ~0.32 in 2023 (regime-shift year with rapid rate hikes)."),
+                P("The model beats the random baseline (0.333) in most years. IV features (iv_change, "
+                  "iv_rank, iv_mean, iv_std) consistently occupy the top 4 importance positions across "
+                  "all walk-forward folds.", cls="mt-2"),
+            ),
+            _doc_fig("walkforward_yearly_f1.png", "Macro F1 by year — consistently above random baseline"),
         ),
-        # LSTM 3-class (also explored in this pipeline)
+        # LSTM 3-class
         _doc_row(
             Div(
                 H4("LSTM on 3-Class (Explored)", style=f"color:{_IMMACULATA};"),
-                P("A bidirectional LSTM with temporal attention was also evaluated on the 3-class target "
-                  "using 60-day lookback sequences. Walk-forward annual retraining applied."),
-                P("Overall macro F1 = 0.411. Competitive with LGBM in certain years (2017, 2020) "
-                  "but less stable — degrades more sharply in recent years (2022-2025) where LGBM "
-                  "maintains better consistency. Selected LGBM for production due to stability, "
-                  "faster inference, and simpler deployment.", cls="mt-2"),
+                P("A bidirectional LSTM with temporal attention was evaluated on the same 3-class target "
+                  "using 60-day lookback sequences and walk-forward annual retraining."),
+                P("Overall macro F1 = 0.411. Competitive in some years (2017, 2020) but less stable — "
+                  "degrades sharply in 2022-2025 where LGBM maintains consistency. LGBM selected for "
+                  "production: better stability, sub-millisecond inference, simpler deployment.", cls="mt-2"),
             ),
-            _doc_fig("lstm_vs_lgbm_walkforward.png", "LSTM vs LGBM walk-forward F1 by year — both on 3-class target."),
+            _doc_fig("lstm_vs_lgbm_walkforward.png", "LSTM vs LGBM walk-forward F1 by year"),
+        ),
+        # Maturity rule
+        Div(
+            H4("Maturity Selection Rule", style=f"color:{_IMMACULATA};"),
+            P("Rather than predicting maturity jointly (requiring 6+ classes and exacerbating data "
+              "scarcity), the production system uses a deterministic IV-rank rule:"),
+            P(Strong("IV rank > 0.5 → sell SHORT"), " (capture elevated premium quickly). ",
+              Strong("IV rank ≤ 0.5 → sell LONG"), " (collect more time value in calm markets).", cls="mt-1"),
+            P("This decoupled approach avoids the curse of dimensionality that limited the 7-class "
+              "models while still adapting maturity to current market conditions.", cls="mt-2"),
+            style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
     )
 
@@ -1434,108 +1493,92 @@ def _docs_lgbm_pipeline():
 def _docs_dl_pipeline():
     """Section 6: Deep learning pipeline — XGBoost baseline, LSTM-CNN, PatchTST on 7-class."""
     return _doc_section("doc-dl-pipeline", "Deep Learning Pipeline (7-Class)",
-        P("This pipeline tackles the full 7-class moneyness-maturity target (ATM_30, ATM_60, ATM_90, "
-          "OTM5_30, OTM5_60_90, OTM10_30, OTM10_60_90), predicting both strike and expiry jointly. "
-          "Models process 50-day sliding window sequences of the top 35 features selected by "
-          "Random Forest importance. Train/val/test split: pre-2022 / 2022-2023 / 2024+. "
-          "Three architectures were evaluated: XGBoost (baseline), LSTM-CNN with attention, "
-          "and PatchTST transformer.", cls="mb-2"),
+        P("This pipeline tackles the full 7-class moneyness-maturity target, predicting both strike "
+          "and expiry jointly. The 7 classes are: ATM_30, ATM_60, ATM_90, OTM5_30, OTM5_60_90, "
+          "OTM10_30, OTM10_60_90. Models process 50-day sliding window sequences of the top 35 "
+          "features (selected by Random Forest importance). Train/val/test: pre-2022 / 2022-2023 / 2024+."),
+        P("Severe class imbalance is the defining challenge: ATM_30 represents 35.4% of samples "
+          "while OTM10_60_90 and OTM5_60_90 each represent ~1%. Partial resampling and class-weighted "
+          "loss functions were applied, but the imbalance fundamentally limits 7-class performance.", cls="mt-2"),
         # XGBoost baseline
         _doc_row(
             Div(
                 H4("XGBoost Baseline (7-Class)", style=f"color:{_IMMACULATA};"),
-                P("XGBoost classifier with Optuna hyperparameter tuning and partial class resampling "
-                  "on the 7-class target. 225 estimators, max_depth=3, learning_rate=0.049. "
-                  "Multi-class softmax objective with early stopping (50 rounds)."),
-                P("Test accuracy: 25.5% / Macro F1: 0.117 / Balanced accuracy: 16.7%. "
-                  "The model struggles with the granularity of 7 classes — severe class imbalance "
-                  "causes predictions to concentrate on dominant buckets (ATM_30, ATM_60). "
-                  "Minority classes (OTM10_60_90, OTM5_30) receive almost no predictions.", cls="mt-2"),
-                P("This established the difficulty of the 7-class problem and motivated the "
+                P("XGBoost with Optuna tuning, partial class resampling, and multi-class softmax. "
+                  "225 estimators, max_depth=3, lr=0.049, early stopping at 50 rounds."),
+                P("Train accuracy: 82.5% / Test accuracy: 33.3% / Test macro F1: 0.142. "
+                  "Massive overfitting gap. Predictions concentrate on dominant buckets (ATM_30, ATM_60); "
+                  "minority classes (OTM10_60_90, OTM5_30) receive near-zero F1 on the test set.", cls="mt-2"),
+                P("This established the fundamental difficulty of 7-class granularity and motivated "
                   "exploration of sequence-based deep learning architectures.", cls="mt-2"),
             ),
-            _doc_fig("model_comparison.png", "7-class model comparison — XGBoost baseline performance."),
+            _doc_fig("model_comparison.png", "7-class model comparison — XGBoost baseline"),
         ),
         # LSTM-CNN architecture
         _doc_row(
             Div(
                 H4("LSTM-CNN + Bahdanau Attention", style=f"color:{_IMMACULATA};"),
-                P("Hybrid deep learning architecture combining two parallel branches that capture "
-                  "different aspects of the temporal input signal:"),
-                P(Strong("CNN Branch"), " — Two-layer 1D convolution for local temporal pattern extraction. "
-                  "Conv1d(35→128, kernel=7) → BatchNorm → ReLU → Dropout → second Conv1d → "
-                  "AdaptiveAvgPool1d(1). Captures short-range features like momentum shifts and "
-                  "volatility spikes within the 50-day window.", cls="mt-1"),
-                P(Strong("BiLSTM Branch"), " — Bidirectional LSTM (2 layers, hidden=128) processes "
-                  "the full sequence and outputs a context-weighted representation via Bahdanau "
-                  "temporal attention. Captures long-range dependencies like trend reversals "
-                  "and regime transitions.", cls="mt-1"),
-                P(Strong("Fusion"), " — CNN output (128-dim) concatenated with LSTM attention output "
-                  "(256-dim) → LayerNorm → Dropout → FC(384→192) → ReLU → Dropout → FC(192→7). "
-                  "The fused representation benefits from both local and global temporal context.", cls="mt-1"),
-                P("Hyperparameters tuned via Optuna: cnn_out=128, kernel=7, lstm_hidden=128, "
-                  "lstm_layers=2, attn_dim=128, batch_size=32. Three training variants explored "
-                  "with different regularization strengths.", cls="mt-2"),
+                P("Hybrid architecture with two parallel branches:"),
+                P(Strong("CNN Branch"), " — Two-layer 1D convolution (35→128, kernel=7) with BatchNorm "
+                  "and AdaptiveAvgPool. Captures short-range patterns: momentum shifts, vol spikes.", cls="mt-1"),
+                P(Strong("BiLSTM Branch"), " — Bidirectional LSTM (2 layers, hidden=128) with Bahdanau "
+                  "temporal attention. Captures long-range dependencies: trend reversals, regime shifts.", cls="mt-1"),
+                P(Strong("Fusion"), " — CNN (128d) + LSTM attention (256d) concatenated → LayerNorm → "
+                  "FC(384→192→7). Combined local and global temporal context.", cls="mt-1"),
+                P("Trained with AdamW, class-weighted cross-entropy loss, early stopping on "
+                  "validation macro F1. Three training variants with different regularization.", cls="mt-2"),
             ),
-            _doc_fig("lstm_training_curves.png", "LSTM-CNN training curves — validation loss monitored for early stopping."),
+            _doc_fig("lstm_training_curves.png", "LSTM-CNN training curves — early divergence of train/val loss"),
         ),
         # LSTM-CNN results
         _doc_row(
             Div(
-                H4("LSTM-CNN Experiment Results", style=f"color:{_IMMACULATA};"),
-                P("20 experiment runs tracked in MLflow across three model variants, each with "
-                  "confusion matrices, ROC curves, and model checkpoints:"),
-                P(Strong("Regularised"), " (dropout=0.5, weight_decay=0.01): 38.1% accuracy / 0.110 macro F1. "
-                  "Heavy regularization improved generalization over the base model — the highest "
-                  "test F1 of any deep learning variant.", cls="mt-1"),
-                P(Strong("Best"), " (dropout=0.155, standard training): 24.5% accuracy / 0.091 macro F1. "
-                  "Lower dropout led to overfitting on the training distribution.", cls="mt-1"),
-                P(Strong("Full"), " (complete architecture, no checkpoint selection): saved for "
-                  "deployment flexibility and MLflow registry integration.", cls="mt-1"),
-                P("The 7-class target space proved challenging for the available data volume (~1,300 "
-                  "monthly decision points). The model learns meaningful structure in the dominant "
-                  "classes (ATM_30, ATM_60) but cannot reliably distinguish all 7 buckets.", cls="mt-2"),
+                H4("LSTM-CNN Results", style=f"color:{_IMMACULATA};"),
+                P("20 experiment runs tracked in MLflow across three variants:"),
+                P(Strong("Regularised"), " (dropout=0.5, weight_decay=0.01): 38.1% accuracy / 0.110 F1 — "
+                  "highest test F1 of any deep learning model. Heavy regularization improved "
+                  "generalization.", cls="mt-1"),
+                P(Strong("Best"), " (dropout=0.155): 24.5% accuracy / 0.091 F1 — lower dropout "
+                  "led to overfitting. Training F1 reached 0.819 while validation peaked at 0.206.", cls="mt-1"),
+                P("Four of seven classes received F1 scores of zero across most models, indicating "
+                  "a fundamental failure to distinguish minority strategy buckets. The OTM10_60_90 class "
+                  "shifted from 1.25% of training data to 53.15% of the 2024 test set.", cls="mt-2"),
             ),
-            _doc_fig("comparison_confusion_matrices.png", "LSTM-CNN confusion matrices across training variants."),
+            _doc_fig("comparison_confusion_matrices.png", "LSTM-CNN confusion matrices across training variants"),
         ),
         # PatchTST
         _doc_row(
             Div(
                 H4("PatchTST Transformer", style=f"color:{_IMMACULATA};"),
-                P("Patch-based time series transformer (HuggingFace PatchTSTForClassification) using "
-                  "100-day sliding window sequences. The architecture divides input sequences into "
-                  "fixed-length patches and applies multi-head self-attention across patches — "
-                  "a technique adapted from Vision Transformers for time series."),
-                P("Walk-forward annual retraining applied (same protocol as the tree-based pipeline). "
-                  "Two variants explored: base model and a pretrained version fine-tuned with "
-                  "FRED macro features (federal funds rate, unemployment, yield curve, VIX).", cls="mt-2"),
-                P("Base PatchTST: 14.4% accuracy / 0.086 macro F1. Pretrained + FRED variant: "
-                  "no measurable improvement. Transformers require substantially more data to "
-                  "learn effective attention patterns — with ~1,300 decision points, the "
-                  "self-attention mechanism overfits to spurious temporal correlations.", cls="mt-2"),
+                P("Patch-based time series transformer (HuggingFace) using 100-day sliding windows. "
+                  "4 encoder layers, embedding dim=64, 2 attention heads. Walk-forward annual retraining."),
+                P("Base: 14.4% accuracy / 0.086 F1. Pretrained + FRED macro variant: no improvement. "
+                  "Transformers require substantially more data than the ~1,300 available monthly "
+                  "decision points — self-attention overfits to spurious temporal correlations.", cls="mt-2"),
             ),
-            _doc_fig("patchtst_walkforward_confusion_matrix.png", "PatchTST walk-forward confusion matrix — inconsistent class predictions."),
+            _doc_fig("patchtst_walkforward_confusion_matrix.png", "PatchTST walk-forward confusion matrix"),
         ),
         _doc_row(
-            P("PatchTST F1 by year shows high variance across evaluation windows, with performance "
-              "oscillating between near-random and moderately above baseline. The model struggles "
-              "to maintain stability across different market regimes (bull/bear/sideways)."),
-            _doc_fig("patchtst_walkforward_yearly_f1.png", "PatchTST walk-forward F1 by year — high variance, unstable across regimes."),
-        ),
-        # Deployment — no figure available for the DL deployment specifically
-        Div(
             Div(
-                H4("Deployment & MLflow Integration", style=f"color:{_IMMACULATA};"),
-                P("The LSTM-CNN model is independently deployed via Docker Compose on AWS EC2 with "
-                  "three containerized services: Streamlit frontend (:8501) for batch CSV prediction, "
-                  "FastAPI inference server (:8000) with /predict and /predict/csv endpoints, and "
-                  "MLflow tracking server (:5000) for model registry and experiment management."),
-                P("Model loading follows a priority chain: MLflow Model Registry "
-                  "(models:/CoveredCallLSTMCNN/Champion) → local file fallback "
-                  "(lstm_cnn_best_model.pth). Infrastructure provisioned via Terraform "
-                  "on AWS EC2 t3.medium.", cls="mt-2"),
+                H4("PatchTST Yearly Stability", style=f"color:{_IMMACULATA};"),
+                P("F1 by year shows high variance — oscillating between near-random and moderately "
+                  "above baseline. The model cannot maintain stability across different market regimes."),
+                P("Key finding from the report: increasing model complexity did not improve performance. "
+                  "The primary limitation is data volume and regime sensitivity, not model capacity.", cls="mt-2"),
             ),
-            style=f"border-bottom:1px solid {_TORERO}; padding-bottom:0.75rem; margin-top:0.75rem;",
+            _doc_fig("patchtst_walkforward_yearly_f1.png", "PatchTST F1 by year — high variance, unstable"),
+        ),
+        # Deployment
+        Div(
+            H4("Docker Deployment", style=f"color:{_IMMACULATA};"),
+            P("The LSTM-CNN model is independently deployed via Docker Compose on AWS EC2 with three "
+              "containerized services: Streamlit frontend (:8501) for batch CSV prediction, FastAPI "
+              "inference server (:8000) with /predict endpoints, and MLflow tracking server (:5000) "
+              "for model registry and experiment management."),
+            P("Model loading follows a priority chain: MLflow Registry "
+              "(models:/CoveredCallLSTMCNN/Champion) → local fallback (lstm_cnn_best_model.pth). "
+              "Infrastructure provisioned via Terraform on t3.medium.", cls="mt-2"),
+            style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
     )
 
@@ -1544,70 +1587,83 @@ def _docs_strategy():
     """Section 7: Post-inference strategy — scoring engine, allocation, backtesting."""
     return _doc_section("doc-strategy", "Strategy & Post-Inference",
         P("The model predicts a moneyness bucket, but the deployed system adds a scoring and "
-          "allocation layer between the model output and the trading decision. This layer ranks "
-          "the 10-ticker universe each month, selects which positions to take, and sizes them "
-          "according to configurable presets.", cls="mb-2"),
+          "allocation layer between model output and trading decisions. This layer — not covered "
+          "in the capstone report — ranks the 10-ticker universe each month, selects which "
+          "positions to take, and sizes them according to configurable presets."),
         # Scoring engine
         Div(
             H4("Composable Scoring Engine", style=f"color:{_IMMACULATA};"),
             P("Each ticker receives a composite score from three weighted components:"),
             P(Strong("1. Model Confidence"), " — the LGBM prediction probability for the chosen bucket. "
-              "Higher confidence = the model sees a clearer signal for this ticker-month.", cls="mt-1"),
+              "Higher confidence means the model sees a clearer signal for this ticker-month.", cls="mt-1"),
             P(Strong("2. Transaction Cost Score"), " — computed from the bid-ask spread of matching "
               "options contracts. Tighter spreads = lower cost = higher score. A turnover penalty "
-              "doubles the cost if the bucket changed from the previous month (discouraging churn).", cls="mt-1"),
-            P(Strong("3. Delta-Hedged Return Score"), " — monthly approximation of Bali et al. (2023). "
-              "Isolates the volatility premium by removing directional stock exposure: "
-              "DH_gain = option_pnl - delta * stock_move - financing_cost. Higher = more pure "
-              "vol premium available.", cls="mt-1"),
-            style=f"border-bottom:1px solid {_TORERO}; padding-bottom:0.75rem; margin-top:0.75rem;",
+              "doubles the cost if the bucket changed from the prior month, discouraging churn.", cls="mt-1"),
+            P(Strong("3. Delta-Hedged Return Score"), " — monthly approximation inspired by "
+              "Bali et al. (2021). Isolates the volatility premium by removing directional exposure: "
+              "DH_gain = option_pnl - delta * stock_move - financing_cost. Higher values indicate "
+              "more pure vol premium available.", cls="mt-1"),
+            style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
         # Presets
         Div(
             H4("Strategy Presets", style=f"color:{_IMMACULATA};"),
-            P("Three presets control the weight given to each scoring component and "
-              "the number of positions taken:"),
+            P("Three model-guided presets control the weight given to each scoring component, "
+              "the number of positions taken, and how capital is sized. Two model-only strategies "
+              "(Argmax and Risk-Adjusted) and one no-model baseline complete the comparison."),
             _doc_columns(
                 Div(
                     P(Strong("Conservative"), cls="mt-1"),
-                    P("Weights: Confidence 30%, TC 50%, Delta-Hedge 20%", cls=TextPresets.muted_sm),
-                    P("Max positions: 7 (wide diversification)", cls=TextPresets.muted_sm),
-                    P("Sizing: Equal weight across positions", cls=TextPresets.muted_sm),
-                    P("Philosophy: Spread capital wide, prioritize low-cost positions.", cls="mt-1"),
+                    P("Confidence 30% / TC 50% / Delta-Hedge 20%", cls=TextPresets.muted_sm),
+                    P("7 positions, equal weight", cls=TextPresets.muted_sm),
+                    P("Spread capital wide, prioritize low-cost trades.", cls="mt-1"),
                     P(Strong("Balanced"), cls="mt-3"),
-                    P("Weights: Confidence 33%, TC 33%, Delta-Hedge 34%", cls=TextPresets.muted_sm),
-                    P("Max positions: 5", cls=TextPresets.muted_sm),
-                    P("Sizing: Equal weight", cls=TextPresets.muted_sm),
-                    P("Philosophy: Equal consideration to all signals.", cls="mt-1"),
+                    P("Confidence 33% / TC 33% / Delta-Hedge 34%", cls=TextPresets.muted_sm),
+                    P("5 positions, equal weight", cls=TextPresets.muted_sm),
+                    P("Equal consideration to all signals.", cls="mt-1"),
+                    P(Strong("Aggressive"), cls="mt-3"),
+                    P("Confidence 60% / TC 10% / Delta-Hedge 30%", cls=TextPresets.muted_sm),
+                    P("3 positions, proportional to composite score", cls=TextPresets.muted_sm),
+                    P("Chase the model's strongest convictions.", cls="mt-1"),
                 ),
                 Div(
-                    P(Strong("Aggressive"), cls="mt-1"),
-                    P("Weights: Confidence 60%, TC 10%, Delta-Hedge 30%", cls=TextPresets.muted_sm),
-                    P("Max positions: 3 (concentrated bets)", cls=TextPresets.muted_sm),
-                    P("Sizing: Proportional to composite score", cls=TextPresets.muted_sm),
-                    P("Philosophy: Chase the model's strongest convictions, tolerate higher costs.", cls="mt-1"),
+                    P(Strong("Argmax (No Scoring)"), cls="mt-1"),
+                    P("Model's top prediction per ticker, all 10 tickers traded, equal weight.", cls=TextPresets.muted_sm),
+                    P("Pure model signal with no filtering.", cls="mt-1"),
+                    P(Strong("Risk-Adjusted (No Scoring)"), cls="mt-3"),
+                    P("P(bucket) x E[return | bucket] using expanding historical averages.", cls=TextPresets.muted_sm),
+                    P("Probability-weighted expected return. Best Sharpe in backtests.", cls="mt-1"),
                     P(Strong("Baseline (No Model)"), cls="mt-3"),
-                    P("Always sell 10% OTM short-dated calls on all tickers, equal weight.", cls=TextPresets.muted_sm),
-                    P("No scoring, no selection. Pure benchmark for comparison.", cls="mt-1"),
+                    P("Always sell 10% OTM short-dated on all tickers, equal weight.", cls=TextPresets.muted_sm),
+                    P("No model, no scoring — pure benchmark.", cls="mt-1"),
                 ),
             ),
-            style=f"border-bottom:1px solid {_TORERO}; padding-bottom:0.75rem; margin-top:0.75rem;",
+            style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
-        # Backtesting results
+        # Backtesting results — these figures cover Argmax, Risk-Adjusted, Baseline, and Oracle only.
+        # The 3 scoring presets (Conservative, Balanced, Aggressive) are computed live in the
+        # Strategy tab of the trading dashboard and are not included in these static figures.
         _doc_row(
-            P("Annual returns breakdown shows strategy performance across different market regimes. "
-              "The model-guided strategies (Argmax, Risk-Adjusted) track close to Always-ATM in "
-              "bull years (2017, 2019) and show differentiation during transitional periods. "
-              "The Oracle (perfect foresight) confirms headroom exists for stronger classifiers."),
-            _doc_fig("annual_returns_comparison.png", "Annual covered call returns by strategy — model vs static vs Oracle."),
+            Div(
+                H4("Annual Returns", style=f"color:{_IMMACULATA};"),
+                P("Annual returns for the non-scored strategies: Argmax (model top pick), "
+                  "Risk-Adjusted (probability-weighted expected return), and OTM10 Baseline "
+                  "(no model). Oracle (perfect foresight) included as an upper bound."),
+                P("The scored presets (Conservative, Balanced, Aggressive) are not shown here — "
+                  "their results are computed live in the Strategy tab of the trading dashboard.", cls="mt-2"),
+            ),
+            _doc_fig("annual_returns_comparison.png", "Annual returns — Argmax, Risk-Adjusted, Baseline, Oracle"),
         ),
         _doc_row(
-            P("Equity curves show cumulative portfolio growth across all strategies. "
-              "Model-Argmax and Model-Risk-Adj deliver similar trajectories, both outperforming "
-              "static OTM strategies but trailing Always-ATM in sustained bull markets. "
-              "The strategies diverge most in volatile periods (2020, 2022) where bucket "
-              "selection has the largest impact on realized returns."),
-            _doc_fig("equity_curves.png", "Equity curves — cumulative growth across all strategy variants."),
+            Div(
+                H4("Equity Curves", style=f"color:{_IMMACULATA};"),
+                P("Cumulative portfolio growth for Argmax, Risk-Adjusted, and static baselines. "
+                  "Model-Argmax and Risk-Adjusted deliver similar trajectories, diverging most "
+                  "in volatile periods (2020, 2022) where bucket selection matters most."),
+                P("Risk-Adjusted achieves the best Sharpe ratio among these strategies. "
+                  "The three scoring presets are available in the live dashboard.", cls="mt-2"),
+            ),
+            _doc_fig("equity_curves.png", "Equity curves — Argmax, Risk-Adjusted, Baseline"),
         ),
     )
 
@@ -1616,15 +1672,14 @@ def _docs_results():
     """Section 8: Side-by-side model results comparison of both pipelines."""
     return _doc_section("doc-results", "Results",
         P("Both pipelines evaluated on held-out test data with honest temporal splits. "
-          "The two approaches target different problem formulations, making direct F1 comparison "
-          "across pipelines misleading — but within each pipeline, the progression from baseline "
-          "to final model tells a clear story.", cls="mb-2"),
+          "Direct F1 comparison across pipelines is misleading (3-class vs 7-class), but "
+          "within each pipeline the progression from baseline to final model is clear."),
         # Side-by-side metrics
         _doc_columns(
             # Left: Tree-based pipeline results
             Div(
                 H4("Tree-Based (3-Class)", style=f"color:{_IMMACULATA};"),
-                P(Strong("Production Model: LightGBM Walk-Forward")),
+                P(Strong("Production: LightGBM Walk-Forward")),
                 Div(
                     P(Strong("Macro F1"), cls=TextPresets.muted_sm), P("0.468"),
                     P(Strong("Test Accuracy"), cls=TextPresets.muted_sm), P("63.0% (2025 held-out)"),
@@ -1632,19 +1687,18 @@ def _docs_results():
                     P(Strong("Validation"), cls=TextPresets.muted_sm), P("Walk-forward annual"),
                     cls="mt-2",
                 ),
-                P(Strong("Model Progression:"), cls="mt-3"),
+                P(Strong("Progression:"), cls="mt-3"),
                 P("RF Baseline → 0.333 F1", cls=TextPresets.muted_sm),
                 P("XGB Baseline → 0.359 F1", cls=TextPresets.muted_sm),
                 P("LGBM Tuned → 0.349 F1", cls=TextPresets.muted_sm),
                 P("LGBM + IV + Walk-Forward → 0.468 F1", cls=TextPresets.muted_sm),
-                P("Key insight: IV features + walk-forward validation provided the "
-                  "largest performance jump (+0.12 F1). Simplifying from 7 to 3 classes "
-                  "made the problem tractable for tree-based models.", cls="mt-2"),
+                P("IV features + walk-forward provided the largest jump "
+                  "(+0.12 F1). Simplifying to 3 classes made the problem tractable.", cls="mt-2"),
             ),
             # Right: DL pipeline results
             Div(
                 H4("Deep Learning (7-Class)", style=f"color:{_IMMACULATA};"),
-                P(Strong("Best Model: LSTM-CNN Regularised")),
+                P(Strong("Best: LSTM-CNN Regularised")),
                 Div(
                     P(Strong("Macro F1"), cls=TextPresets.muted_sm), P("0.110"),
                     P(Strong("Test Accuracy"), cls=TextPresets.muted_sm), P("38.1%"),
@@ -1652,15 +1706,30 @@ def _docs_results():
                     P(Strong("Validation"), cls=TextPresets.muted_sm), P("Time-based 80/20"),
                     cls="mt-2",
                 ),
-                P(Strong("Model Progression:"), cls="mt-3"),
-                P("XGB 7-Class → 0.117 F1", cls=TextPresets.muted_sm),
+                P(Strong("Progression:"), cls="mt-3"),
+                P("XGB 7-Class → 0.142 F1", cls=TextPresets.muted_sm),
                 P("LSTM-CNN Best → 0.091 F1", cls=TextPresets.muted_sm),
                 P("LSTM-CNN Regularised → 0.110 F1", cls=TextPresets.muted_sm),
                 P("PatchTST → 0.086 F1", cls=TextPresets.muted_sm),
-                P("Key insight: The 7-class joint prediction is fundamentally harder. "
-                  "Regularization helped (0.091 → 0.110), but the data volume (~1,300 "
-                  "monthly points) limits what sequence models can learn.", cls="mt-2"),
+                P("7-class joint prediction is fundamentally harder. "
+                  "~1,300 monthly points limits what sequence models can learn.", cls="mt-2"),
             ),
+        ),
+        # Key findings
+        Div(
+            H4("Key Findings", style=f"color:{_IMMACULATA};"),
+            P("All models outperform random baseline, confirming meaningful predictive signal in the "
+              "feature set. The best 7-class model (LSTM-CNN regularised) achieved 34.0% test accuracy "
+              "— a 2.4x improvement over random selection (14.3%)."),
+            P("Performance is fundamentally constrained by distribution shift: the OTM10_60_90 class "
+              "increased from 1.25% of training data to 53.15% of the 2024 test set. Increasing model "
+              "complexity did not help — the limitation is data volume and regime sensitivity, "
+              "not architecture.", cls="mt-2"),
+            P("Transformer-based models underperformed simpler tree-based methods, confirming that "
+              "data-hungry architectures are not appropriate for this dataset size. Macroeconomic "
+              "features (FRED) did not contribute meaningfully; stock-level technical and fundamental "
+              "features — especially implied volatility measures — proved most informative.", cls="mt-2"),
+            style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
     )
 
