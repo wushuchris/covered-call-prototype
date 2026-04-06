@@ -101,6 +101,37 @@
 - Debt-to-equity ratio had 7 missing observations (1%), imputed with median
 - Options data deduplicated from 1.85M to 927K unique contracts
 
+## Paper vs Actual System — Known Discrepancies
+
+The capstone report was written at an earlier project stage. The system evolved significantly afterward.
+These discrepancies are documented so Claude does not rely on stale paper claims.
+
+### Stale (project evolved past the paper)
+- Ticker universe: paper references ADMA, SHAK, AXON, NTRA — current system uses AAPL, AMZN, AVGO, GOOG, GOOGL, META, MSFT, NVDA, TSLA, WMT
+- Feature count: paper says 28 — actual is 27 (3-class) or 35 (7-class after RF selection), LGBM production uses 34
+- Daily observations: paper says 47,350 — notebooks show 52,486
+- Options raw count: paper says 1.85M — notebooks show 3.19M
+- Deployment: paper says Streamlit — actual system is FastHTML/MonsterUI + FastAPI (two microservices)
+- The 3-class walk-forward pipeline (LGBM, F1=0.47/0.59) is not mentioned in the paper at all — it was developed after the report was written
+- The scoring engine (confidence + TC + delta-hedge), backtesting framework, and LangGraph dual-model inference were all built post-report
+
+### Errors in the paper
+- LSTM hidden size: paper says 64, actual is 128
+- Architecture: paper describes "LSTM with attention" — omits the CNN branch (actual model is hybrid LSTM-CNN with 2x Conv1d + BiLSTM + attention + fusion head)
+- Early stopping: paper says "triggered after epoch 7" — best val F1 was at epoch 7 but early stopping (patience=4) triggered at epoch 11
+- OTM10_60_90 training proportion: paper says 1.25% — likely understated (dataset-wide rate is 6.1%)
+- Options dedup: paper says 1.85M → 927K — notebooks show 3.19M raw
+
+### Verified correct in the paper
+- LSTM-CNN training F1: 0.819, val F1: 0.206, gap: 0.613
+- XGBoost train F1: 0.830, test F1: 0.142
+- XGBoost dominant class (OTM10_60_90) F1: 0.48
+- Best test accuracy: 34.0% (threshold-tuned LSTM-CNN), 2.4x over random
+- PatchTST hyperparameters: d_model=64, heads=2, layers=4, ffn=64, dropout=0.107, head_dropout=0.340
+- Train/val/test splits: train < 2022, val 2022-2023, test 2024+
+- OTM10_60_90 = 53.15% of 2024 test data
+- Distribution shift is the primary performance constraint, not model architecture
+
 ## What This Means for the Analysis Node
 
 When synthesizing predictions, Claude should:
@@ -111,3 +142,4 @@ When synthesizing predictions, Claude should:
 5. Note that the model is a decision-support tool, not a trading signal — additional post-processing is always needed
 6. Acknowledge that OTM10 baseline strategy has historically been hard to beat
 7. When models disagree, the LGBM prediction should generally be trusted more (0.59 F1 vs 0.11 F1)
+8. Use ACTUAL system numbers (this file), not paper claims, when citing performance

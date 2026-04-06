@@ -1,0 +1,102 @@
+CAPSTONE REPORT FACT-CHECK
+==========================
+AAI-590-G6-Capstone-Report.pdf vs actual notebooks
+Checked against: final_notebooks/ (7-class pipeline) and experiment_notebooks/ (3-class pipeline)
+Date: 2026-04-05
+
+Note: The project evolved significantly after the paper was written — many discrepancies
+are expected because we changed features, labels, models, and ticker universe over time.
+This document separates "stale but understandable" from "should be corrected."
+
+
+VERIFIED CORRECT
+----------------
+[OK] LSTM-CNN training F1: 0.819, val F1: 0.206, overfitting gap: 0.613
+[OK] XGBoost train F1: 0.830, test F1: 0.142
+[OK] XGBoost dominant class (OTM10_60_90) F1: 0.48 on test
+[OK] Best test accuracy: 34.0% (threshold-tuned LSTM-CNN), 2.4x over random (14.3%)
+[OK] PatchTST hyperparameters: d_model=64, heads=2, layers=4, ffn=64, dropout=0.107, head_dropout=0.340
+[OK] PatchTST learning rate: 4.2e-4, weight decay: 2.8e-4
+[OK] Train/val/test splits: train < 2022, val 2022-2023, test 2024+
+[OK] OTM10_60_90 = 53.15% of 2024 test data
+[OK] Distribution shift is primary constraint, not model architecture
+[OK] All models exceeded random baseline
+[OK] 9 buckets consolidated to 7 classes for deep learning pipeline
+[OK] Feature selection via Random Forest on training set only
+[OK] Highly correlated pairs: operating/net margin (0.95), 21d momentum/SMA50 (0.88), 10d/21d vol (0.82)
+
+
+STALE — PROJECT EVOLVED PAST THE PAPER
+---------------------------------------
+These are not errors in the paper — they reflect an earlier project state.
+
+[STALE] Ticker universe
+  Paper says: ADMA, SHAK, AXON, NTRA (among the 10)
+  Current:    AAPL, AMZN, AVGO, GOOG, GOOGL, META, MSFT, NVDA, TSLA, WMT
+  Action:     Update paper if revising
+
+[STALE] Feature count
+  Paper says: 28 engineered features (15 technical, 9 fundamental, 4 valuation)
+  Current:    27 (3-class experiment pipeline), 35 (7-class after RF selection), 34 (LGBM production with IV features)
+  Action:     Clarify which pipeline the paper describes
+
+[STALE] Daily observations
+  Paper says: 47,350
+  Notebooks:  52,486
+  Action:     Update count
+
+[STALE] Options raw/dedup counts
+  Paper says: ~1.85M raw -> 927,008 unique contracts, 52,184 relevant calls
+  Notebooks:  3.19M raw, 87,194 valid moneyness contracts (experiment pipeline)
+  Action:     Update if different data pull was used
+
+[STALE] Deployment description
+  Paper says: "containerized architecture (Streamlit interface, FastAPI backend, and MLflow tracking)"
+  Current:    FastHTML + MonsterUI on :8008, FastAPI inference on :8009, systemd deployment, LangGraph DAG
+  Action:     Update if revising — Streamlit is no longer the production UI
+
+[STALE] Missing from paper entirely
+  - 3-class walk-forward pipeline (LGBM F1=0.47, the actual production model)
+  - Scoring engine: confidence + transaction cost + delta-hedged return (3 presets)
+  - Backtesting framework: 6 strategies (Baseline, Argmax, Risk-Adjusted, Conservative, Balanced, Aggressive)
+  - LangGraph dual-model inference (LGBM + LSTM-CNN in parallel)
+  - Claude AI analysis integration
+  Action:     Consider adding as appendix or future work update
+
+
+ERRORS — SHOULD BE CORRECTED
+-----------------------------
+These are factual inaccuracies regardless of project evolution.
+
+[ERROR] LSTM hidden size
+  Paper says: "hidden size of 64"
+  Actual:     128 (notebook 08: LSTM(35, 128, num_layers=2, bidirectional=True))
+  Fix:        Change 64 -> 128
+
+[ERROR] LSTM architecture description
+  Paper says: "bidirectional LSTM with temporal attention" (describes it as LSTM only)
+  Actual:     Hybrid LSTM-CNN with 2x Conv1d layers + BiLSTM + temporal attention + fusion head
+  Fix:        Add CNN branch description — the architecture is significantly more complex
+
+[ERROR] Early stopping timing
+  Paper says: "Validation loss began diverging... after epoch 7, which triggered early stopping"
+  Actual:     Best val F1 was at epoch 7, but early stopping patience=4 means it triggered at epoch 11
+  Fix:        "Best validation F1 at epoch 7; early stopping triggered at epoch 11 (patience=4)"
+
+[ERROR] OTM10_60_90 training proportion
+  Paper says: "approximately 1.25% of the training dataset"
+  Actual:     Dataset-wide rate is 6.1%, so pre-2022 training should be higher than 1.25%
+  Fix:        Verify exact training-only proportion and update
+
+[ERROR] PatchTST training config
+  Paper says: "maximum of 12 epochs with a batch size of 32, early stopping patience of 3"
+  Actual:     Optuna trials used epochs=10, patience=3. Final training used epochs=15, patience=4.
+  Fix:        Clarify whether describing tuning or final training
+
+
+SUMMARY
+-------
+- 14 claims verified correct
+- 5 items stale due to project evolution (not errors)
+- 5 factual errors that should be corrected in any revision
+- The 3-class LGBM production pipeline (our best model) is completely absent from the paper
