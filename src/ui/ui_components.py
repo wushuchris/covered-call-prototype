@@ -517,7 +517,7 @@ def claude_analysis_card(data: dict):
                 }),
                 header=Div(
                     UkIcon("bar-chart", height=18, width=18),
-                    H4(" Prediction Distribution", style=f"color:{_FOUNDERS}; display:inline;"),
+                    H4(" LSTM-CNN Predicted Classes", style=f"color:{_FOUNDERS}; display:inline;"),
                     style="display:flex; align-items:center; gap:0.5rem;",
                 ),
             )
