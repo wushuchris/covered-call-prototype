@@ -135,30 +135,137 @@ def _fred_fallback() -> dict:
 
 # ── yfinance data fetching ───────────────────────────────────────────────
 
-def _fetch_ticker_data(ticker: str, days: int = 300) -> dict:
+_batch_prices_cache = {}
+
+
+def fetch_batch_prices(tickers: list, days: int = 400) -> dict:
+    """Bulk-download daily prices for all tickers in one yfinance call.
+
+    Caches for the session (cleared on server restart).
+
+    Args:
+        tickers: List of symbols.
+        days: Calendar days of history.
+
+    Returns:
+        Dict mapping ticker → DataFrame (date, open, high, low, close, volume).
+    """
+    global _batch_prices_cache
+    cache_key = tuple(sorted(tickers))
+    if cache_key in _batch_prices_cache:
+        return _batch_prices_cache[cache_key]
+
+    try:
+        raw = yf.download(tickers, period=f"{days}d", auto_adjust=True,
+                          group_by="ticker", threads=True)
+        result = {}
+        for t in tickers:
+            try:
+                df = raw[t].dropna(how="all").reset_index()
+                df.columns = [c.lower() for c in df.columns]
+                result[t] = df
+            except Exception:
+                result[t] = pd.DataFrame()
+        _batch_prices_cache[cache_key] = result
+        logger.info(f"Batch prices fetched: {len(result)} tickers")
+        return result
+    except Exception as e:
+        logger.error(f"Batch price fetch failed: {e}")
+        return {t: pd.DataFrame() for t in tickers}
+
+
+def _get_fundamentals(ticker: str) -> dict:
+    """Fetch fundamentals from balance_sheet, financials, and info.
+
+    Uses the structured financial statements (not just .info) to get
+    values matching the Alpha Vantage schema the models were trained on.
+
+    Args:
+        ticker: Stock symbol.
+
+    Returns:
+        Dict with fundamental values.
+    """
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+        bs = t.balance_sheet
+        inc = t.financials
+
+        # Latest quarter from balance sheet
+        bs_latest = bs.iloc[:, 0] if not bs.empty else pd.Series(dtype=float)
+        inc_latest = inc.iloc[:, 0] if not inc.empty else pd.Series(dtype=float)
+
+        def _get(series, key, default=0.0):
+            v = series.get(key, default)
+            return float(v) if v is not None and not pd.isna(v) else default
+
+        return {
+            "totalAssets": _get(bs_latest, "Total Assets"),
+            "totalCurrentAssets": _get(bs_latest, "Current Assets"),
+            "totalLiabilities": _get(bs_latest, "Total Liabilities Net Minority Interest"),
+            "totalCurrentLiabilities": _get(bs_latest, "Current Liabilities"),
+            "longTermDebt": _get(bs_latest, "Long Term Debt"),
+            "totalShareholderEquity": _get(bs_latest, "Stockholders Equity"),
+            "commonStockSharesOutstanding": float(info.get("sharesOutstanding", 0) or 0),
+            "SharesOutstanding": float(info.get("sharesOutstanding", 0) or 0),
+            "operatingExpenses": _get(inc_latest, "Operating Expense"),
+            "dividendPayout": float(info.get("lastDividendValue", 0) or 0),
+            "EPS": float(info.get("trailingEps", 0) or 0),
+            "BookValue": float(info.get("bookValue", 0) or 0),
+            "Beta": float(info.get("beta", 1) or 1),
+            # Derived
+            "grossMargins": float(info.get("grossMargins", 0) or 0),
+            "profitMargins": float(info.get("profitMargins", 0) or 0),
+            "revenueGrowth": float(info.get("revenueGrowth", 0) or 0),
+            "earningsGrowth": float(info.get("earningsGrowth", 0) or 0),
+            "debtToEquity": float(info.get("debtToEquity", 0) or 0),
+            "trailingPE": float(info.get("trailingPE", 0) or 0),
+            "priceToSalesTrailing12Months": float(info.get("priceToSalesTrailing12Months", 0) or 0),
+            "enterpriseToEbitda": float(info.get("enterpriseToEbitda", 0) or 0),
+            "freeCashflow": float(info.get("freeCashflow", 0) or 0),
+            "marketCap": float(info.get("marketCap", 1) or 1),
+            "netIncomeToCommon": float(info.get("netIncomeToCommon", 0) or 0),
+            # yfinance 52-week stats from info (updated daily)
+            "52WeekHigh": float(info.get("fiftyTwoWeekHigh", 0) or 0),
+            "52WeekLow": float(info.get("fiftyTwoWeekLow", 0) or 0),
+            "50DayMovingAverage": float(info.get("fiftyDayAverage", 0) or 0),
+            "200DayMovingAverage": float(info.get("twoHundredDayAverage", 0) or 0),
+        }
+
+    except Exception as e:
+        logger.warning(f"Fundamentals fetch failed for {ticker}: {e}")
+        return {}
+
+
+def _fetch_ticker_data(ticker: str, days: int = 400) -> dict:
     """Fetch prices, fundamentals, and options for one ticker.
+
+    Uses batch-cached prices if available, otherwise fetches individually.
 
     Args:
         ticker: Stock symbol.
         days: Number of calendar days of history to fetch.
 
     Returns:
-        Dict with 'prices' (DataFrame), 'info' (dict), 'options' (DataFrame).
+        Dict with 'prices' (DataFrame), 'fundamentals' (dict), 'options' (DataFrame).
     """
     try:
-        t = yf.Ticker(ticker)
+        # Check batch cache first
+        cache_key = tuple(sorted(UNIVERSE))
+        if cache_key in _batch_prices_cache and ticker in _batch_prices_cache[cache_key]:
+            prices = _batch_prices_cache[cache_key][ticker]
+        else:
+            t = yf.Ticker(ticker)
+            prices = t.history(period=f"{days}d", auto_adjust=True).reset_index()
+            prices.columns = [c.lower() for c in prices.columns]
 
-        # Daily prices
-        prices = t.history(period=f"{days}d", auto_adjust=True)
-        prices = prices.reset_index()
-        prices.columns = [c.lower() for c in prices.columns]
+        fundamentals = _get_fundamentals(ticker)
 
-        # Fundamentals from info
-        info = t.info or {}
-
-        # Options — nearest expiry
+        # Options - nearest expiry
         options_df = pd.DataFrame()
         try:
+            t = yf.Ticker(ticker)
             expiries = t.options
             if expiries:
                 chain = t.option_chain(expiries[0])
@@ -170,22 +277,22 @@ def _fetch_ticker_data(ticker: str, days: int = 300) -> dict:
         except Exception as e:
             logger.warning(f"Options fetch failed for {ticker}: {e}")
 
-        return {"prices": prices, "info": info, "options": options_df}
+        return {"prices": prices, "fundamentals": fundamentals, "options": options_df}
 
     except Exception as e:
         logger.error(f"yfinance fetch failed for {ticker}: {e}")
-        return {"prices": pd.DataFrame(), "info": {}, "options": pd.DataFrame()}
+        return {"prices": pd.DataFrame(), "fundamentals": {}, "options": pd.DataFrame()}
 
 
 # ── LGBM feature computation ────────────────────────────────────────────
 
-def _compute_lgbm_features(prices: pd.DataFrame, info: dict,
+def _compute_lgbm_features(prices: pd.DataFrame, fundamentals: dict,
                            options: pd.DataFrame) -> dict:
     """Compute 34 LGBM features from live data.
 
     Args:
         prices: Daily OHLCV DataFrame (needs ~250 rows for rolling windows).
-        info: yfinance ticker.info dict.
+        fundamentals: Dict from _get_fundamentals().
         options: Call options DataFrame with impliedVolatility.
 
     Returns:
@@ -198,7 +305,6 @@ def _compute_lgbm_features(prices: pd.DataFrame, info: dict,
     volume = prices["volume"].values
     returns = pd.Series(close).pct_change().values
 
-    # Technical features
     feats = {}
     feats["vol_21d"] = float(np.std(returns[-21:]) * np.sqrt(252))
     feats["vol_63d"] = float(np.std(returns[-63:]) * np.sqrt(252))
@@ -224,23 +330,24 @@ def _compute_lgbm_features(prices: pd.DataFrame, info: dict,
     feats["volume_ratio"] = float(volume[-1] / vol_avg) if vol_avg > 0 else 1.0
     feats["high_vol_regime"] = float(feats["vol_21d"] > 0.25)
 
-    # Fundamental features from yfinance info
-    feats["gross_margin"] = float(info.get("grossMargins", 0) or 0)
-    feats["net_margin"] = float(info.get("profitMargins", 0) or 0)
-    feats["revenue_growth_yoy"] = float(info.get("revenueGrowth", 0) or 0)
-    feats["earnings_growth_yoy"] = float(info.get("earningsGrowth", 0) or 0)
-    feats["debt_to_equity"] = float(info.get("debtToEquity", 0) or 0) / 100.0
-    feats["cash_ratio"] = 0.0  # not directly in yfinance info
-    total_assets = float(info.get("totalAssets", 1) or 1)
-    net_income = float(info.get("netIncomeToCommon", 0) or 0)
-    equity = float(info.get("totalStockholderEquity", 1) or 1)
+    # Fundamentals from balance_sheet + financials + info
+    f = fundamentals
+    feats["gross_margin"] = f.get("grossMargins", 0)
+    feats["net_margin"] = f.get("profitMargins", 0)
+    feats["revenue_growth_yoy"] = f.get("revenueGrowth", 0)
+    feats["earnings_growth_yoy"] = f.get("earningsGrowth", 0)
+    feats["debt_to_equity"] = f.get("debtToEquity", 0) / 100.0
+    feats["cash_ratio"] = 0.0
+    total_assets = f.get("totalAssets", 1) or 1
+    net_income = f.get("netIncomeToCommon", 0)
+    equity = f.get("totalShareholderEquity", 1) or 1
     feats["roe"] = net_income / equity if equity != 0 else 0.0
     feats["roa"] = net_income / total_assets if total_assets != 0 else 0.0
-    feats["pe_ratio"] = float(info.get("trailingPE", 0) or 0)
-    feats["ps_ratio"] = float(info.get("priceToSalesTrailing12Months", 0) or 0)
-    feats["ev_ebitda"] = float(info.get("enterpriseToEbitda", 0) or 0)
-    fcf = float(info.get("freeCashflow", 0) or 0)
-    mkt_cap = float(info.get("marketCap", 1) or 1)
+    feats["pe_ratio"] = f.get("trailingPE", 0)
+    feats["ps_ratio"] = f.get("priceToSalesTrailing12Months", 0)
+    feats["ev_ebitda"] = f.get("enterpriseToEbitda", 0)
+    fcf = f.get("freeCashflow", 0)
+    mkt_cap = f.get("marketCap", 1) or 1
     feats["fcf_yield"] = fcf / mkt_cap if mkt_cap > 0 else 0.0
 
     # IV features from options
@@ -271,56 +378,54 @@ def _compute_lgbm_features(prices: pd.DataFrame, info: dict,
 # ── LSTM feature computation ────────────────────────────────────────────
 
 def _compute_lstm_daily_row(prices_row: pd.Series, prices_df: pd.DataFrame,
-                            idx: int, info: dict, fred: dict) -> dict:
+                            idx: int, fundamentals: dict, fred: dict) -> dict:
     """Compute one daily row of LSTM features.
 
     Args:
         prices_row: Single row from prices DataFrame.
         prices_df: Full prices DataFrame (for rolling computations).
         idx: Index of this row in prices_df.
-        info: yfinance ticker info.
+        fundamentals: Dict from _get_fundamentals().
         fred: FRED macro values dict.
 
     Returns:
         Dict with 35 LSTM feature values.
     """
     close = prices_df["close"].values[:idx + 1]
+    f = fundamentals
 
     feats = {}
-    # Price features
     feats["open"] = float(prices_row.get("open", 0))
     feats["high"] = float(prices_row.get("high", 0))
     feats["low"] = float(prices_row.get("low", 0))
     feats["close"] = float(prices_row.get("close", 0))
-    feats["adj_close"] = feats["close"]  # yfinance auto-adjusts
+    feats["adj_close"] = feats["close"]
 
-    # Moving averages
     feats["ma_20"] = float(np.mean(close[-20:])) if len(close) >= 20 else feats["close"]
     feats["ma_50"] = float(np.mean(close[-50:])) if len(close) >= 50 else feats["close"]
     feats["ma_200"] = float(np.mean(close[-200:])) if len(close) >= 200 else feats["close"]
-    feats["50DayMovingAverage"] = feats["ma_50"]
-    feats["200DayMovingAverage"] = feats["ma_200"]
+    feats["50DayMovingAverage"] = f.get("50DayMovingAverage", feats["ma_50"])
+    feats["200DayMovingAverage"] = f.get("200DayMovingAverage", feats["ma_200"])
     feats["rolling_max"] = float(np.max(close[-252:])) if len(close) >= 252 else float(np.max(close))
-    feats["52WeekHigh"] = feats["rolling_max"]
-    feats["52WeekLow"] = float(np.min(close[-252:])) if len(close) >= 252 else float(np.min(close))
+    feats["52WeekHigh"] = f.get("52WeekHigh", feats["rolling_max"])
+    feats["52WeekLow"] = f.get("52WeekLow", float(np.min(close[-252:])) if len(close) >= 252 else float(np.min(close)))
 
-    # Fundamentals from yfinance info
-    feats["totalAssets"] = float(info.get("totalAssets", 0) or 0)
-    feats["totalCurrentAssets"] = float(info.get("totalCurrentAssets", 0) or 0)
-    feats["totalLiabilities"] = float(info.get("totalDebt", 0) or 0)
-    feats["totalCurrentLiabilities"] = float(info.get("totalCurrentLiabilities", 0) or 0)
-    feats["longTermDebt"] = float(info.get("longTermDebt", 0) or 0)
-    feats["totalShareholderEquity"] = float(info.get("totalStockholderEquity", 0) or 0)
-    feats["commonStockSharesOutstanding"] = float(info.get("sharesOutstanding", 0) or 0)
-    feats["SharesOutstanding"] = feats["commonStockSharesOutstanding"]
-    feats["operatingExpenses"] = float(info.get("operatingExpenses", 0) or 0)
-    feats["dividendPayout"] = float(info.get("lastDividendValue", 0) or 0)
-    feats["EPS"] = float(info.get("trailingEps", 0) or 0)
-    feats["BookValue"] = float(info.get("bookValue", 0) or 0)
-    feats["Beta"] = float(info.get("beta", 1) or 1)
-    feats["gross_margin"] = float(info.get("grossMargins", 0) or 0)
-    bvps = feats["BookValue"] if feats["BookValue"] > 0 else 1.0
-    feats["book_value_per_share_proxy"] = bvps
+    # Fundamentals from balance_sheet + financials
+    feats["totalAssets"] = f.get("totalAssets", 0)
+    feats["totalCurrentAssets"] = f.get("totalCurrentAssets", 0)
+    feats["totalLiabilities"] = f.get("totalLiabilities", 0)
+    feats["totalCurrentLiabilities"] = f.get("totalCurrentLiabilities", 0)
+    feats["longTermDebt"] = f.get("longTermDebt", 0)
+    feats["totalShareholderEquity"] = f.get("totalShareholderEquity", 0)
+    feats["commonStockSharesOutstanding"] = f.get("commonStockSharesOutstanding", 0)
+    feats["SharesOutstanding"] = f.get("SharesOutstanding", 0)
+    feats["operatingExpenses"] = f.get("operatingExpenses", 0)
+    feats["dividendPayout"] = f.get("dividendPayout", 0)
+    feats["EPS"] = f.get("EPS", 0)
+    feats["BookValue"] = f.get("BookValue", 0)
+    feats["Beta"] = f.get("Beta", 1)
+    feats["gross_margin"] = f.get("grossMargins", 0)
+    feats["book_value_per_share_proxy"] = feats["BookValue"] if feats["BookValue"] > 0 else 1.0
     equity = feats["totalShareholderEquity"] if feats["totalShareholderEquity"] > 0 else 1.0
     feats["debt_to_equity"] = feats["totalLiabilities"] / equity
 
@@ -385,7 +490,17 @@ def _build_contracts(ticker: str, options: pd.DataFrame,
     return df
 
 
-# ── Main entry point ─────────────────────────────────────────────────────
+# ── Main entry points ────────────────────────────────────────────────────
+
+def prefetch_batch_prices(tickers: list = None):
+    """Pre-download prices for all tickers in one call.
+
+    Call this before looping fetch_live() per ticker so that
+    individual fetches hit the cache instead of making 10 calls.
+    """
+    tickers = tickers or UNIVERSE
+    fetch_batch_prices(tickers, days=400)
+
 
 def fetch_live(ticker: str) -> dict:
     """Fetch and compute everything needed for live inference on one ticker.
@@ -405,7 +520,7 @@ def fetch_live(ticker: str) -> dict:
         logger.info(f"Fetching live data for {ticker}...")
         data = _fetch_ticker_data(ticker, days=400)
         prices = data["prices"]
-        info = data["info"]
+        fundamentals = data["fundamentals"]
         options = data["options"]
 
         if prices.empty or len(prices) < SEQ_LEN:
@@ -415,13 +530,13 @@ def fetch_live(ticker: str) -> dict:
         fred = _fetch_fred()
 
         # ── LGBM features ──
-        lgbm_feats = _compute_lgbm_features(prices, info, options)
+        lgbm_feats = _compute_lgbm_features(prices, fundamentals, options)
 
         # ── LSTM features (50-day window) ──
         lstm_rows = []
-        start_idx = max(0, len(prices) - SEQ_LEN - 200)  # enough for rolling windows
+        start_idx = max(0, len(prices) - SEQ_LEN - 200)
         for i in range(start_idx, len(prices)):
-            row = _compute_lstm_daily_row(prices.iloc[i], prices, i, info, fred)
+            row = _compute_lstm_daily_row(prices.iloc[i], prices, i, fundamentals, fred)
             lstm_rows.append(row)
 
         lstm_df = pd.DataFrame(lstm_rows)

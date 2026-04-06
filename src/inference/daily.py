@@ -37,6 +37,13 @@ async def run_batch_inference(date: str) -> dict:
         Dict with per-ticker results and summary stats.
     """
     try:
+        # Pre-fetch prices for all tickers in one yfinance call (if any will go live)
+        try:
+            from src.inference.live_data import prefetch_batch_prices
+            prefetch_batch_prices(UNIVERSE)
+        except Exception:
+            pass  # non-critical — individual fetches will work as fallback
+
         results = []
         for ticker in UNIVERSE:
             try:
