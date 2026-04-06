@@ -24,11 +24,13 @@ from monsterui.all import *
 from src.ui.ui_components import (
     launcher_screen, trading_screen, inference_results_card,
     batch_results_card, backtest_results_card, model_performance_card,
-    mlflow_experiments_card, docs_screen, docs_section_response, TICKERS,
+    mlflow_experiments_card, claude_analysis_card,
+    docs_screen, docs_section_response, TICKERS,
 )
 from src.ui.ui_handler import (
     handle_inference_call, handle_batch_inference,
     handle_backtest_call, handle_model_metrics, handle_mlflow_experiments,
+    handle_claude_analysis,
 )
 
 from src.utils import create_logger, log_call
@@ -207,6 +209,20 @@ async def post(date: str = "", ticker: str = "", batch: str = ""):
     except Exception as e:
         logger.error(f"Error on inference_call: {e}")
         return Div(P("Inference request failed.", cls="uk-text-danger"))
+
+
+@rt("/claude_analysis_call")
+@log_call(logger)
+async def get(ticker: str = "", date: str = ""):
+    """Handle Claude analysis request, fired automatically after inference renders."""
+    try:
+        result = await handle_claude_analysis(ticker=ticker, date=date)
+        if "error" in result:
+            return claude_analysis_card(result)
+        return claude_analysis_card(result)
+    except Exception as e:
+        logger.error(f"Error on claude_analysis_call: {e}")
+        return claude_analysis_card({"error": str(e)})
 
 
 @rt("/toggle_model_year")

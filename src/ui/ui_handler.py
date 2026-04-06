@@ -103,6 +103,29 @@ async def handle_mlflow_experiments() -> dict:
         return {"error": f"MLflow experiments call failed: {e}"}
 
 
+async def handle_claude_analysis(ticker: str, date: str) -> dict:
+    """Handle a Claude analysis request from the UI.
+
+    Calls the inference service's /claude_analysis endpoint with
+    ticker and date. The inference service re-fetches predictions
+    and sends them to Claude for synthesis.
+
+    Args:
+        ticker: Stock symbol.
+        date: Date string.
+
+    Returns:
+        Dict with 'analysis' text or error info.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"http://localhost:8009/claude_analysis?ticker={ticker}&date={date}"
+            async with session.get(url) as resp:
+                return await resp.json()
+    except Exception as e:
+        return {"error": f"Claude analysis call failed: {e}"}
+
+
 async def handle_backtest_call(year: str = "all",
                                budget: float = 100_000) -> dict:
     """Handle a backtesting request from the UI.

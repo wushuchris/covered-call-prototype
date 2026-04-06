@@ -17,6 +17,7 @@ from src.inference.chart import build_candlestick_data
 from src.inference.model import compute_model_metrics, get_lgbm_experiment_info
 from src.inference.backtesting import run_backtest_all
 from src.inference.mlflow_reader import load_experiments
+from src.inference.claude_analysis import analyze_predictions
 
 logger = create_logger("inference")
 
@@ -126,6 +127,37 @@ async def mlflow_experiments_endpoint():
         return result
     except Exception as e:
         logger.error(f"Error on /mlflow_experiments: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/claude_analysis")
+async def claude_analysis_endpoint(ticker: str = "", date: str = ""):
+    """Run Claude analysis on both model predictions for a given ticker/date.
+
+    Called separately from inference — the UI fires this after model
+    predictions have already rendered. Receives ticker+date, re-fetches
+    predictions from feature stores, and sends to Claude for synthesis.
+
+    Args:
+        ticker: Stock symbol.
+        date: Date string (YYYY-MM-DD).
+
+    Returns:
+        Dict with 'analysis' text or 'error'.
+    """
+    try:
+        from src.inference.model import predict_bucket as lgbm_predict
+        from src.inference.lstm_model import predict_bucket as lstm_predict
+
+        lgbm = lgbm_predict(ticker, date)
+        lstm = lstm_predict(ticker, date)
+
+        result = await analyze_predictions(
+            ticker=ticker, date=date, lgbm=lgbm, lstm=lstm,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error on /claude_analysis: {e}")
         return {"error": str(e)}
 
 

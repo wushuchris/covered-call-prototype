@@ -194,6 +194,8 @@ def _daily_inference_section():
             Div(_inference_sidebar(), cls="col-span-3"),
             cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
         ),
+        # Claude analysis panel — full width below the grid, swapped via htmx
+        _claude_analysis_panel(),
         id="daily-inference",
     )
 
@@ -288,6 +290,56 @@ def _inference_results_panel():
     )
 
 
+def _claude_analysis_panel():
+    """Placeholder panel for Claude AI analysis, swapped after inference completes.
+
+    Returns:
+        Div with id for hx-target.
+    """
+    return Div(
+        Card(
+            P("AI analysis will appear here after inference completes.",
+              cls=TextPresets.muted_sm, style="text-align:center; padding:1rem 0;"),
+            header=Div(
+                UkIcon("brain", height=20, width=20),
+                H4(" Claude Analysis", style=f"color:{_FOUNDERS}; display:inline;"),
+                style="display:flex; align-items:center; gap:0.5rem;",
+            ),
+        ),
+        id="claude-analysis",
+        style="margin-top:1rem;",
+    )
+
+
+def claude_analysis_card(data: dict):
+    """Render Claude's analysis of both model predictions.
+
+    Args:
+        data: Dict with 'analysis' text or 'error'.
+
+    Returns:
+        Card Div with analysis text.
+    """
+    try:
+        if "error" in data:
+            content = P(f"Analysis unavailable: {data['error']}",
+                        cls=TextPresets.muted_sm, style="font-style:italic;")
+        else:
+            content = P(data.get("analysis", "No analysis returned."),
+                        style="line-height:1.6;")
+
+        return Card(
+            content,
+            header=Div(
+                UkIcon("brain", height=20, width=20),
+                H4(" Claude Analysis", style=f"color:{_FOUNDERS}; display:inline;"),
+                style="display:flex; align-items:center; gap:0.5rem;",
+            ),
+        )
+    except Exception:
+        return _fallback("Claude analysis")
+
+
 def inference_results_card(data: dict):
     """Render dual-model inference results: LGBM + LSTM-CNN table + chart.
 
@@ -298,58 +350,19 @@ def inference_results_card(data: dict):
         Card Div with results table and candlestick chart.
     """
     try:
-        lgbm = data.get("lgbm", {})
-        lstm = data.get("lstm", {})
-
-        # Tuples: (label, value, tooltip_or_None)
-        display_rows = [
-            ("Ticker", data.get("ticker", "—"), None),
-            ("Date", data.get("date", "—"), None),
-            ("Month", data.get("month", "—"), None),
-            ("Baseline", data.get("baseline", "—"),
-             "What you'd pick if you ignored the model entirely: always sell 10% OTM short-dated calls."),
-            ("Sample", data.get("sample_type", "—"),
-             "Train Dataset = the model learned from this data. Test Dataset = the model has never seen this data."),
+        # Table: ticker, date, LSTM first (default model), then LGBM
+        table_rows = [
+            Tr(Td("Ticker"), Td(data.get("ticker", "—"))),
+            Tr(Td("Date"), Td(data.get("date", "—"))),
+            # LSTM-CNN (primary)
+            Tr(Td(Span(Strong("LSTM-CNN 7-Class"), style=f"color:{_IMMACULATA};")), Td("")),
+            Tr(Td("Bucket"), Td(data.get("lstm_prediction", "—"))),
+            Tr(Td("Confidence"), Td(f"{data.get('lstm_confidence', 0):.1%}")),
+            # LGBM (secondary)
+            Tr(Td(Span(Strong("LGBM 3-Class"), style=f"color:{_IMMACULATA};")), Td("")),
+            Tr(Td("Bucket"), Td(data.get("model_bucket", "—"))),
+            Tr(Td("Confidence"), Td(f"{data.get('model_confidence', 0):.1%}")),
         ]
-
-        # Build shared info rows
-        table_rows = []
-        for label, value, tip_text in display_rows:
-            metric_cell = Span(label)
-            if tip_text:
-                metric_cell = Span(label, _tip(tip_text))
-            table_rows.append(Tr(Td(metric_cell), Td(value)))
-
-        # Separator + LGBM prediction
-        table_rows.append(Tr(
-            Td(Strong("LGBM 3-Class", style=f"color:{_IMMACULATA};")),
-            Td(""),
-        ))
-        table_rows.append(Tr(
-            Td(Span("Prediction", _tip(
-                "Recommended moneyness + maturity. SHORT = sell within 45 days, LONG = 46-120 days."))),
-            Td(data.get("model_bucket", "—")),
-        ))
-        table_rows.append(Tr(
-            Td(Span("Confidence", _tip("LGBM model probability for its top pick."))),
-            Td(f"{data.get('model_confidence', 0):.1%}"),
-        ))
-
-        # Separator + LSTM prediction
-        table_rows.append(Tr(
-            Td(Strong("LSTM-CNN 7-Class", style=f"color:{_IMMACULATA};")),
-            Td(""),
-        ))
-        table_rows.append(Tr(
-            Td(Span("Prediction", _tip(
-                "Joint moneyness + maturity bucket from the deep learning model. "
-                "7 classes: ATM/OTM5/OTM10 crossed with 30d/60-90d expiry."))),
-            Td(data.get("lstm_prediction", "—")),
-        ))
-        table_rows.append(Tr(
-            Td(Span("Confidence", _tip("LSTM-CNN softmax probability for its top pick."))),
-            Td(f"{data.get('lstm_confidence', 0):.1%}"),
-        ))
 
         # OHLC chart
         chart_data = data.get("chart_data", [])
@@ -376,6 +389,41 @@ def inference_results_card(data: dict):
                       f"background:{_TORERO}22; border-left:4px solid {_TORERO};",
             )
 
+        disclaimer = P(
+            "Confidence reflects how strongly each model favors its pick — "
+            "it does not guarantee the outcome. Past model accuracy varies by market conditions.",
+            cls=TextPresets.muted_sm,
+            style="font-style:italic; margin-top:0.75rem; padding-top:0.5rem; "
+                  f"border-top:1px solid {_TORERO}30;",
+        )
+
+        # htmx out-of-band swap: replace the Claude analysis panel with a loading
+        # state that auto-fires the API call. This Div targets #claude-analysis
+        # via hx-swap-oob, so it replaces the placeholder in one shot.
+        ticker = data.get("ticker", "")
+        date_val = data.get("date", "")
+        analysis_oob = Div(
+            Card(
+                Div(
+                    Loading(),
+                    P("Analyzing predictions...", cls=TextPresets.muted_sm,
+                      style="text-align:center; margin-top:0.5rem;"),
+                    style="padding:1rem 0;",
+                ),
+                header=Div(
+                    UkIcon("brain", height=20, width=20),
+                    H4(" Claude Analysis", style=f"color:{_FOUNDERS}; display:inline;"),
+                    style="display:flex; align-items:center; gap:0.5rem;",
+                ),
+            ),
+            hx_get=f"/claude_analysis_call?ticker={ticker}&date={date_val}",
+            hx_trigger="load",
+            hx_swap="innerHTML",
+            id="claude-analysis",
+            hx_swap_oob="true",
+            style="margin-top:1rem;",
+        )
+
         return Div(
             snap_warning if snap_warning else "",
             Card(
@@ -386,6 +434,7 @@ def inference_results_card(data: dict):
                             Tbody(*table_rows),
                             cls="uk-table uk-table-small uk-table-divider",
                         ),
+                        disclaimer,
                         style="flex:2;",
                     ),
                     Div(chart_el, style="flex:3; min-height:200px;"),
@@ -394,6 +443,8 @@ def inference_results_card(data: dict):
                 header=H4(f"Inference — {data.get('ticker', '?')} @ {data.get('date', '?')}",
                            style=f"color:{_FOUNDERS};"),
             ),
+            # OOB swap replaces the Claude analysis panel with loading → auto-fetch
+            analysis_oob,
         )
     except Exception:
         return _fallback("inference results")
@@ -455,10 +506,6 @@ def batch_results_card(data: dict):
             "Date": summary.get("date", "—"),
             "Models": summary.get("model", "—"),
             "Tickers": str(summary.get("n_tickers", 0)),
-            "Top Pick (LGBM)": f"{summary.get('top_ticker', '?')} ({summary.get('top_prediction', '?')})",
-            "Top Confidence": f"{summary.get('top_confidence', 0):.1%}",
-            "Avg Confidence": f"{summary.get('avg_confidence', 0):.1%}",
-            "Sample": summary.get("sample_type", "—"),
         }
         stats_header = ["Metric", "Value"]
         stats_body = [{"Metric": k, "Value": v} for k, v in stats_display.items()]
@@ -477,7 +524,7 @@ def batch_results_card(data: dict):
                 "Sample": r.get("sample_type", "—"),
             })
 
-        detail_header = ["Ticker", "LGBM", "LGBM Conf", "LSTM-CNN", "LSTM Conf", "Sample", "Chart"]
+        detail_header = ["Ticker", "LSTM-CNN", "LSTM Conf", "LGBM", "LGBM Conf", "Chart"]
 
         # Build table rows manually to embed the chart icon in each row
         batch_date = summary.get("date", "")
@@ -489,11 +536,10 @@ def batch_results_card(data: dict):
             table_rows.append(
                 Tr(
                     Td(Strong(ticker)),
-                    Td(r.get("model_bucket", "—")),
-                    Td(f"{r.get('model_confidence', 0):.1%}"),
                     Td(r.get("lstm_prediction", "—")),
                     Td(f"{r.get('lstm_confidence', 0):.1%}"),
-                    Td(r.get("sample_type", "—")),
+                    Td(r.get("model_bucket", "—")),
+                    Td(f"{r.get('model_confidence', 0):.1%}"),
                     Td(_batch_ticker_chart_modal(ticker, batch_date)),
                 )
             )
