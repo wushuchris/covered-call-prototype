@@ -775,20 +775,36 @@ def batch_results_card(data: dict):
             cls="uk-table uk-table-small uk-table-divider",
         )
 
-        # Snap warning for batch -show which tickers snapped
+        # Snap warning
         snapped_tickers = [r.get("ticker") for r in results
                            if "error" not in r and r.get("snapped")]
         batch_snap_warning = None
         if snapped_tickers:
             batch_snap_warning = Div(
-                P(f"Date snapped for: {', '.join(snapped_tickers)}. Showingnearest available month.",
+                P(f"Date snapped for: {', '.join(snapped_tickers)} - showing nearest available month.",
                   style="margin:0;"),
                 cls="uk-alert uk-alert-warning",
                 style="padding:0.75rem 1rem; margin-bottom:0.5rem; border-radius:6px; "
                       f"background:{_TORERO}22; border-left:4px solid {_TORERO};",
             )
 
+        # Live warning
+        live_tickers = [r.get("ticker") for r in results
+                        if "error" not in r and r.get("is_live")]
+        batch_live_warning = None
+        if live_tickers:
+            batch_live_warning = Div(
+                P(Strong("Experimental - Live Pipeline"), style="margin:0 0 0.25rem 0;"),
+                P("Features computed from real-time market data (yfinance), not the historical "
+                  "training dataset. Predictions may differ from backtested performance.",
+                  style="margin:0;", cls=TextPresets.muted_sm),
+                cls="uk-alert",
+                style="padding:0.75rem 1rem; margin-bottom:0.5rem; border-radius:6px; "
+                      f"background:{_IMMACULATA}12; border-left:4px solid {_IMMACULATA};",
+            )
+
         return Div(
+            batch_live_warning if batch_live_warning else "",
             batch_snap_warning if batch_snap_warning else "",
             Card(
                 Div(
