@@ -127,12 +127,12 @@ async def build_prompt_node(state: AnalysisState) -> dict:
 
 ## Strategy Scoring (this month, all tickers)
 
-| Strategy | LGBM Return | LSTM-CNN Return |
-|----------|-------------|-----------------|
+| Strategy | LSTM-CNN Return | LGBM Return |
+|----------|-----------------|-------------|
 | Baseline (OTM10) | {baseline_ret:.4%} | {baseline_ret:.4%} |
-| Argmax | {lgbm_s.get('argmax', {}).get('return', 0):.4%} | {lstm_s.get('argmax', {}).get('return', 0):.4%} |
-| Risk-Adjusted | {lgbm_s.get('risk_adjusted', {}).get('return', 0):.4%} | {lstm_s.get('risk_adjusted', {}).get('return', 0):.4%} |
-| Conservative | {lgbm_s.get('conservative', {}).get('return', 0):.4%} | {lstm_s.get('conservative', {}).get('return', 0):.4%} |
+| Argmax | {lstm_s.get('argmax', {}).get('return', 0):.4%} | {lgbm_s.get('argmax', {}).get('return', 0):.4%} |
+| Risk-Adjusted | {lstm_s.get('risk_adjusted', {}).get('return', 0):.4%} | {lgbm_s.get('risk_adjusted', {}).get('return', 0):.4%} |
+| Conservative | {lstm_s.get('conservative', {}).get('return', 0):.4%} | {lgbm_s.get('conservative', {}).get('return', 0):.4%} |
 
 {"" if is_batch else f"""## Market Context — {ticker}
 

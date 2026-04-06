@@ -353,13 +353,13 @@ def claude_analysis_card(data: dict):
                            ("conservative", "Conservative")]:
             scoring_rows.append(Tr(
                 Td(label),
-                Td(_ret(lgbm_s.get(key, {}))),
                 Td(_ret(lstm_s.get(key, {}))),
+                Td(_ret(lgbm_s.get(key, {}))),
             ))
 
         scoring_card = Card(
             Table(
-                Thead(Tr(Th("Strategy"), Th("LGBM"), Th("LSTM-CNN"))),
+                Thead(Tr(Th("Strategy"), Th("LSTM-CNN"), Th("LGBM"))),
                 Tbody(*scoring_rows),
                 cls="uk-table uk-table-small uk-table-divider",
             ),
