@@ -27,7 +27,6 @@ UNIVERSE = ["AAPL", "AMZN", "AVGO", "GOOG", "GOOGL", "META", "MSFT", "NVDA", "TS
 class GraphState(TypedDict):
     ticker: str
     date: str
-    is_live: bool
     lgbm_result: dict
     lstm_result: dict
     combined: dict
@@ -36,7 +35,7 @@ class GraphState(TypedDict):
 # ── Nodes ────────────────────────────────────────────────────────────────
 
 async def validate_node(state: GraphState) -> dict:
-    """Validate ticker and date. Detect if this is a live inference request."""
+    """Validate ticker and date."""
     ticker = state["ticker"]
     date = state["date"]
 
@@ -45,26 +44,17 @@ async def validate_node(state: GraphState) -> dict:
     if not validate_date(date):
         raise ValueError(f"Invalid date format: '{date}'. Expected YYYY-MM-DD.")
 
-    # Detect live: date is beyond both feature stores
-    from src.inference.model import get_date_range
-    from src.inference.lstm_model import get_max_date
-
-    lgbm_max = pd.Timestamp(get_date_range()["max_date"])
-    lstm_max = pd.Timestamp(get_max_date())
-    request_date = pd.Timestamp(date)
-
-    is_live = request_date > max(lgbm_max, lstm_max)
-    if is_live:
-        logger.info(f"Live inference detected: {date} > stores ({lgbm_max.date()}, {lstm_max.date()})")
-
-    return {"is_live": is_live}
+    return {}
 
 
 async def lgbm_node(state: GraphState) -> dict:
-    """Run LGBM 3-class prediction — store lookup or live."""
+    """Run LGBM 3-class prediction — checks its own store range."""
     ticker, date = state["ticker"], state["date"]
 
-    if state.get("is_live"):
+    from src.inference.model import get_date_range
+    lgbm_max = pd.Timestamp(get_date_range()["max_date"])
+    if pd.Timestamp(date) > lgbm_max:
+        logger.info(f"LGBM live: {date} > {lgbm_max.date()}")
         return _lgbm_live(ticker, date)
 
     from src.inference.model import predict_bucket
@@ -72,10 +62,13 @@ async def lgbm_node(state: GraphState) -> dict:
 
 
 async def lstm_node(state: GraphState) -> dict:
-    """Run LSTM-CNN 7-class prediction — store lookup or live."""
+    """Run LSTM-CNN 7-class prediction — checks its own store range."""
     ticker, date = state["ticker"], state["date"]
 
-    if state.get("is_live"):
+    from src.inference.lstm_model import get_max_date
+    lstm_max = pd.Timestamp(get_max_date())
+    if pd.Timestamp(date) > lstm_max:
+        logger.info(f"LSTM live: {date} > {lstm_max.date()}")
         return _lstm_live(ticker, date)
 
     from src.inference.lstm_model import predict_bucket
@@ -171,7 +164,9 @@ async def aggregate_node(state: GraphState) -> dict:
     """Merge both model results into a single response."""
     lgbm = state["lgbm_result"]
     lstm = state["lstm_result"]
-    is_live = state.get("is_live", False)
+
+    # Either model running live triggers the experimental banner
+    is_live = lgbm.get("is_live", False) or lstm.get("is_live", False)
 
     combined = {
         "ticker": state["ticker"],
@@ -221,7 +216,6 @@ async def invoke_graph(ticker: str, date: str) -> dict:
     result = await graph.ainvoke({
         "ticker": ticker,
         "date": date,
-        "is_live": False,
         "lgbm_result": {},
         "lstm_result": {},
         "combined": {},
