@@ -11,6 +11,8 @@
 # there would then exist a generic backup that takes its place (the error is logged, and we do show a time-limited toast to the user letting it know there was an
 # error rendering that specific component)
 
+from datetime import date
+
 from fasthtml.common import *
 import fasthtml.common as fh
 from monsterui.all import *
@@ -205,13 +207,13 @@ def _inference_sidebar():
         Card with form controls.
     """
     return Card(
-        # date input
+        # date input — defaults to today
         Label("Date"),
-        Input(type="date", name="date", id="inference-date"),
+        Input(type="date", name="date", id="inference-date", value=date.today().isoformat()),
         # today checkbox — pure htmx, no JS. hx_get swaps the date input for today's value
         Div(
             Label(
-                CheckboxX(id="today-check",
+                CheckboxX(id="today-check", checked=True,
                           hx_get="/today_date",
                           hx_target="#inference-date",
                           hx_swap="outerHTML"),
