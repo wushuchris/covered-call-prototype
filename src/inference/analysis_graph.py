@@ -166,14 +166,33 @@ Cover: {"model agreement/disagreement patterns across the universe, which ticker
 Use numbers, not vague language.
 
 ### RECOMMENDED ACTION
-{"For the portfolio: state which tickers to prioritize, which bucket(s) to trade, and your overall confidence level (HIGH / MEDIUM / LOW). Note any tickers where models strongly disagree or where the baseline clearly dominates." if is_batch else "State the specific bucket to trade (e.g. 'Sell OTM5 short-dated calls') and your confidence level (HIGH / MEDIUM / LOW)."}
-Then in 2-3 sentences explain why: which model(s) support it, how it compares to the baseline,
-and what the key risk is. If models disagree or confidence is low, say so plainly and suggest
-defaulting to OTM10 baseline with an explanation.
 
-End with one sentence on the most important limitation the trader should know for {"this portfolio" if is_batch else "THIS specific prediction"}.
+{"Present the portfolio recommendation using this exact structure:" if is_batch else "Present the recommendation using this exact structure:"}
 
-Be direct, quantitative, and honest about uncertainty. This is for institutional money managers."""
+{"**Confidence Level:** HIGH / MEDIUM / LOW" if not is_batch else "**Overall Confidence:** HIGH / MEDIUM / LOW"}
+
+{"""**Recommended Positions:**
+
+| Ticker | Bucket | LGBM Conf | Action | Note |
+|--------|--------|-----------|--------|------|
+| (fill for each ticker worth trading) | | | Trade / Default to OTM10 / Skip | (brief reason) |
+
+**Capital Allocation:**
+
+| Bucket | % Allocation | Tickers |
+|--------|-------------|---------|
+| (fill per bucket) | | |""" if is_batch else """**Trade:** (specific bucket, e.g. "Sell OTM5 short-dated calls")"""}
+
+Then write a **Rationale** paragraph (2-3 sentences): which model(s) support it, how it compares to baseline, and the key risk.
+
+Then write a **Critical Risk** paragraph (2-3 sentences): the most important limitation for {"this portfolio" if is_batch else "this prediction"}, referencing specific data points.
+
+IMPORTANT FORMATTING RULES:
+- Overview and rationale sections should be prose (paragraphs)
+- Ticker decisions, bucket allocations, and any per-stock data MUST be in markdown tables
+- Never list ticker-level decisions as bullet points or inline text — always tabular
+- Be direct, quantitative, and honest about uncertainty
+- This is for institutional money managers"""
 
     return {"prompt": prompt}
 
