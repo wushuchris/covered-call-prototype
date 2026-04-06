@@ -183,14 +183,18 @@ Use numbers, not vague language.
 |--------|-------------|---------|
 | (fill per bucket) | | |""" if is_batch else """**Trade:** (specific bucket, e.g. "Sell OTM5 short-dated calls")"""}
 
-Then write a **Rationale** paragraph (2-3 sentences): which model(s) support it, how it compares to baseline, and the key risk.
+### RATIONALE
+Write 2-3 sentences: which model(s) support the recommendation, how it compares to baseline, and the key risk.
 
-Then write a **Critical Risk** paragraph (2-3 sentences): the most important limitation for {"this portfolio" if is_batch else "this prediction"}, referencing specific data points.
+### CRITICAL RISK
+Write 2-3 sentences: the most important limitation for {"this portfolio" if is_batch else "this prediction"}, referencing specific data points from the inputs above.
 
-IMPORTANT FORMATTING RULES:
-- Overview and rationale sections should be prose (paragraphs)
-- Ticker decisions, bucket allocations, and any per-stock data MUST be in markdown tables
-- Never list ticker-level decisions as bullet points or inline text — always tabular
+YOU MUST INCLUDE ALL FOUR SECTIONS: OVERVIEW, RECOMMENDED ACTION, RATIONALE, CRITICAL RISK.
+Do not skip any section. Each section must have its ### header.
+
+FORMATTING RULES:
+- OVERVIEW, RATIONALE, and CRITICAL RISK must be prose paragraphs
+- RECOMMENDED ACTION must use markdown tables for ticker decisions and allocations — never bullet points or inline text for per-stock data
 - Be direct, quantitative, and honest about uncertainty
 - This is for institutional money managers"""
 

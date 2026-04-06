@@ -381,13 +381,13 @@ def claude_analysis_card(data: dict):
             context_items.extend([
                 Tr(Td(Span("Trend", _tip("Overall market direction based on moving average crossovers."))),
                    Td(str(price.get("trend", "—")))),
-                Tr(Td(Span("High Vol", _tip("Whether the market is in an elevated volatility regime."))),
+                Tr(Td(Span("Vol Regime", _tip("Current volatility environment across the portfolio."))),
                    Td(str(price.get("vol_regime", "—")))),
-                Tr(Td(Span("Avg 20d Vol", _tip("Average annualized volatility over the last 20 trading days across all tickers."))),
+                Tr(Td(Span("Avg 20d Realized Vol", _tip("Average annualized realized volatility over the last 20 trading days across all tickers."))),
                    Td(f"{price.get('vol_20d', 0):.1%}")),
-                Tr(Td(Span("Avg 60d Return", _tip("Average price change over the last 60 trading days."))),
+                Tr(Td(Span("60d Return (Avg)", _tip("Average price change over the last 60 trading days across all tickers."))),
                    Td(f"{price.get('period_return', 0):.1%}")),
-                Tr(Td(Span("Worst Drawdown", _tip("Largest peak-to-current drop across the portfolio."))),
+                Tr(Td(Span("Max Drawdown", _tip("Largest peak-to-current drop across the portfolio (60d window)."))),
                    Td(f"{price.get('drawdown_from_peak', 0):.1%}")),
             ])
             if track:
@@ -404,7 +404,7 @@ def claude_analysis_card(data: dict):
                        Td(f"{price.get('trend', '?').title()}")),
                     Tr(Td(Span("Vol Regime", _tip("Current volatility environment. High vol favors shorter-dated options for faster premium capture."))),
                        Td(f"{price.get('vol_regime', '?').replace('_', ' ').title()}")),
-                    Tr(Td(Span("20d Vol", _tip("Annualized volatility computed from the last 20 trading days."))),
+                    Tr(Td(Span("20d Realized Vol", _tip("Annualized realized volatility computed from the last 20 trading days."))),
                        Td(f"{price.get('vol_20d', 0):.1%}")),
                     Tr(Td(Span("60d Return", _tip("Total price change over the last 60 trading days."))),
                        Td(f"{price.get('period_return', 0):.1%}")),
