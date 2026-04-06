@@ -224,11 +224,12 @@ def _inference_sidebar():
         Select(
             *[Option(t, value=t) for t in TICKERS],
             name="ticker", id="inference-ticker",
+            disabled=True, style="opacity:0.5;",
         ),
-        # batch checkbox — grays out ticker dropdown when checked
+        # batch checkbox — default checked (all stocks), uncheck for single ticker
         Div(
             Label(
-                CheckboxX(id="batch-check", name="batch",
+                CheckboxX(id="batch-check", name="batch", checked=True,
                           hx_get="/toggle_ticker",
                           hx_include="#batch-check",
                           hx_target="#inference-ticker",
