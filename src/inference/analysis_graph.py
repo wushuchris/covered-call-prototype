@@ -175,13 +175,7 @@ Use numbers, not vague language.
 
 | Ticker | Bucket | LGBM Conf | LSTM Conf | Agree? | Action | Note |
 |--------|--------|-----------|-----------|--------|--------|------|
-| (fill for each ticker) | | | | Y/N | Trade / Default to OTM10 / Skip | (brief reason) |
-
-**Capital Allocation:**
-
-| Bucket | % Allocation | Tickers |
-|--------|-------------|---------|
-| (fill per bucket) | | |""" if is_batch else """**Trade:** (specific bucket, e.g. "Sell OTM5 short-dated calls")"""}
+| (fill for each ticker) | | | | Y/N | Trade / Default to OTM10 / Skip | (brief reason) |""" if is_batch else """**Trade:** (specific bucket, e.g. "Sell OTM5 short-dated calls")"""}
 
 ### RATIONALE
 Write 2-3 sentences: which model(s) support the recommendation, how it compares to baseline, and the key risk.
