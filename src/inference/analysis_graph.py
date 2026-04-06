@@ -60,11 +60,10 @@ async def build_prompt_node(state: AnalysisState) -> dict:
     ctx = state["context"]
     insights = _get_insights()
 
-    # Scoring summary
+    # Scoring summary (dual model)
     baseline_ret = scr.get("baseline", {}).get("return", 0)
-    argmax_ret = scr.get("argmax", {}).get("return", 0)
-    risk_adj_ret = scr.get("risk_adjusted", {}).get("return", 0)
-    presets = scr.get("presets", {})
+    lgbm_s = scr.get("lgbm", {})
+    lstm_s = scr.get("lstm", {})
 
     # Context summary
     price = ctx.get("price", {})
@@ -128,12 +127,12 @@ async def build_prompt_node(state: AnalysisState) -> dict:
 
 ## Strategy Scoring (this month, all tickers)
 
-| Strategy | Monthly Return |
-|----------|---------------|
-| Baseline (OTM10) | {baseline_ret:.4%} |
-| Argmax | {argmax_ret:.4%} |
-| Risk-Adjusted | {risk_adj_ret:.4%} |
-| Conservative | {presets.get('conservative', {}).get('return', 0):.4%} |
+| Strategy | LGBM Return | LSTM-CNN Return |
+|----------|-------------|-----------------|
+| Baseline (OTM10) | {baseline_ret:.4%} | {baseline_ret:.4%} |
+| Argmax | {lgbm_s.get('argmax', {}).get('return', 0):.4%} | {lstm_s.get('argmax', {}).get('return', 0):.4%} |
+| Risk-Adjusted | {lgbm_s.get('risk_adjusted', {}).get('return', 0):.4%} | {lstm_s.get('risk_adjusted', {}).get('return', 0):.4%} |
+| Conservative | {lgbm_s.get('conservative', {}).get('return', 0):.4%} | {lstm_s.get('conservative', {}).get('return', 0):.4%} |
 
 {"" if is_batch else f"""## Market Context — {ticker}
 

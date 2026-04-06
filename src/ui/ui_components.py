@@ -337,31 +337,29 @@ def claude_analysis_card(data: dict):
                 ),
             )
 
-        # ── Scoring table ──
+        # ── Scoring table (dual model) ──
         scoring = data.get("scoring", {})
-        _strat_tips = {
-            "baseline": "Always sell 10% OTM short-dated calls. No model involved. Purebenchmark.",
-            "argmax": "Model's single highest-probability pick. Simple and transparent.",
-            "risk_adjusted": "Picks the bucket that maximizes probability times expected return.",
-            "conservative": "Scored strategy: spreads across 7 positions, prioritizes low-cost trades.",
-        }
-        scoring_rows = []
-        for key, label in [("baseline", "Baseline (OTM10)"), ("argmax", "Argmax"),
-                           ("risk_adjusted", "Risk-Adjusted")]:
-            s = scoring.get(key, {})
-            ret = s.get("return", 0)
-            scoring_rows.append(Tr(Td(Span(label, _tip(_strat_tips[key]))), Td(f"{ret:.4%}")))
-        for preset in ["conservative"]:
-            s = scoring.get("presets", {}).get(preset, {})
-            ret = s.get("return", 0)
-            scoring_rows.append(Tr(Td(Span(preset.title(), _tip(_strat_tips[preset]))), Td(f"{ret:.4%}")))
+        lgbm_s = scoring.get("lgbm", {})
+        lstm_s = scoring.get("lstm", {})
+        baseline_s = scoring.get("baseline", {})
+
+        def _ret(d):
+            return f"{d.get('return', 0):.4%}" if d else "N/A"
+
+        scoring_rows = [
+            Tr(Td("Baseline (OTM10)"), Td(_ret(baseline_s)), Td(_ret(baseline_s))),
+        ]
+        for key, label in [("argmax", "Argmax"), ("risk_adjusted", "Risk-Adjusted"),
+                           ("conservative", "Conservative")]:
+            scoring_rows.append(Tr(
+                Td(label),
+                Td(_ret(lgbm_s.get(key, {}))),
+                Td(_ret(lstm_s.get(key, {}))),
+            ))
 
         scoring_card = Card(
             Table(
-                Thead(Tr(
-                    Th("Strategy"),
-                    Th(Span("Return", _tip("Realized covered call return for this month using actual options data."))),
-                )),
+                Thead(Tr(Th("Strategy"), Th("LGBM"), Th("LSTM-CNN"))),
                 Tbody(*scoring_rows),
                 cls="uk-table uk-table-small uk-table-divider",
             ),
