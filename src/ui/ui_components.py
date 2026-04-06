@@ -450,13 +450,85 @@ def claude_analysis_card(data: dict):
             ),
         )
 
-        # Layout: context (left, 2/3) + scoring (right, 1/3), analysis full width below
+        # ── Batch viz cards (only in batch mode) ──
+        viz_row = ""
+        analytics = data.get("analytics", {})
+        predictions = data.get("predictions", [])
+        if analytics and predictions:
+            # Confidence heatmap: tickers × models
+            heatmap_data = []
+            for p in predictions:
+                heatmap_data.append({
+                    "x": p.get("ticker", "?"),
+                    "y": round(p.get("lgbm_confidence", 0) * 100, 1),
+                })
+            heatmap_lstm = []
+            for p in predictions:
+                heatmap_lstm.append({
+                    "x": p.get("ticker", "?"),
+                    "y": round(p.get("lstm_confidence", 0) * 100, 1),
+                })
+
+            heatmap_card = Card(
+                ApexChart(opts={
+                    "chart": {"type": "heatmap", "height": 180, "toolbar": {"show": False}},
+                    "series": [
+                        {"name": "LGBM", "data": heatmap_data},
+                        {"name": "LSTM", "data": heatmap_lstm},
+                    ],
+                    "dataLabels": {"enabled": True, "style": {"fontSize": "11px"}},
+                    "colors": [_IMMACULATA],
+                    "plotOptions": {"heatmap": {"radius": 4, "colorScale": {
+                        "ranges": [
+                            {"from": 0, "to": 40, "color": _TORERO, "name": "Low"},
+                            {"from": 40, "to": 70, "color": _IMMACULATA, "name": "Med"},
+                            {"from": 70, "to": 100, "color": _FOUNDERS, "name": "High"},
+                        ],
+                    }}},
+                    "xaxis": {"labels": {"style": {"fontSize": "10px"}}},
+                }),
+                header=Div(
+                    UkIcon("grid", height=18, width=18),
+                    H4(" Confidence Map", style=f"color:{_FOUNDERS}; display:inline;"),
+                    style="display:flex; align-items:center; gap:0.5rem;",
+                ),
+            )
+
+            # Prediction distribution: bucket counts
+            bucket_dist = analytics.get("bucket_distribution", {})
+            dist_categories = list(bucket_dist.keys())
+            dist_values = list(bucket_dist.values())
+
+            dist_card = Card(
+                ApexChart(opts={
+                    "chart": {"type": "bar", "height": 180, "toolbar": {"show": False}},
+                    "series": [{"name": "Tickers", "data": dist_values}],
+                    "xaxis": {"categories": dist_categories},
+                    "colors": [_IMMACULATA],
+                    "plotOptions": {"bar": {"borderRadius": 4, "columnWidth": "60%"}},
+                    "dataLabels": {"enabled": True},
+                }),
+                header=Div(
+                    UkIcon("bar-chart", height=18, width=18),
+                    H4(" Prediction Distribution", style=f"color:{_FOUNDERS}; display:inline;"),
+                    style="display:flex; align-items:center; gap:0.5rem;",
+                ),
+            )
+
+            viz_row = Div(
+                Div(heatmap_card, style="flex:1;"),
+                Div(dist_card, style="flex:1;"),
+                style="display:flex; gap:1rem;",
+            )
+
+        # Layout: context + scoring (row 1), viz charts (row 2, batch only), analysis (row 3)
         return Div(
             Div(
                 Div(context_card, style="flex:2;"),
                 Div(scoring_card, style="flex:1;"),
                 style="display:flex; gap:1rem;",
             ),
+            viz_row,
             analysis_card,
             style="display:flex; flex-direction:column; gap:1rem;",
         )

@@ -212,6 +212,22 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = "",
                     "lstm_confidence": lstm.get("confidence", 0),
                 })
 
+            # Compute batch analytics for Claude + human viz
+            lgbm_buckets = [p["lgbm_bucket"] for p in all_preds]
+            bucket_counts = {}
+            for b in lgbm_buckets:
+                moneyness = b.split("_")[0] if "_" in b else b
+                bucket_counts[moneyness] = bucket_counts.get(moneyness, 0) + 1
+
+            lgbm_confs = [p["lgbm_confidence"] for p in all_preds]
+            lstm_confs = [p["lstm_confidence"] for p in all_preds]
+
+            # Agreement: LGBM moneyness matches LSTM moneyness prefix
+            n_agree = sum(
+                1 for p in all_preds
+                if p["lgbm_bucket"].split("_")[0] in p.get("lstm_prediction", "")
+            )
+
             inference = {
                 "batch": True,
                 "predictions": all_preds,
@@ -219,6 +235,21 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = "",
                 "model_confidence": 0,
                 "lstm_prediction": "BATCH",
                 "lstm_confidence": 0,
+                # Batch analytics (Claude + human viz)
+                "analytics": {
+                    "bucket_distribution": bucket_counts,
+                    "agreement_rate": n_agree / len(all_preds) if all_preds else 0,
+                    "lgbm_confidence_stats": {
+                        "mean": sum(lgbm_confs) / len(lgbm_confs) if lgbm_confs else 0,
+                        "min": min(lgbm_confs) if lgbm_confs else 0,
+                        "max": max(lgbm_confs) if lgbm_confs else 0,
+                    },
+                    "lstm_confidence_stats": {
+                        "mean": sum(lstm_confs) / len(lstm_confs) if lstm_confs else 0,
+                        "min": min(lstm_confs) if lstm_confs else 0,
+                        "max": max(lstm_confs) if lstm_confs else 0,
+                    },
+                },
             }
             # Context for all tickers — summarized for portfolio view
             all_contexts = {}
@@ -268,6 +299,13 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = "",
                 "model_confidence": lgbm.get("model_confidence", 0),
                 "lstm_prediction": lstm.get("predicted_class", "?"),
                 "lstm_confidence": lstm.get("confidence", 0),
+                # Probability distributions for Claude context
+                "lgbm_probs": {
+                    "ATM": lgbm.get("prob_ATM", 0) if "prob_ATM" in lgbm else 0,
+                    "OTM5": lgbm.get("prob_OTM5", 0) if "prob_OTM5" in lgbm else 0,
+                    "OTM10": lgbm.get("prob_OTM10", 0) if "prob_OTM10" in lgbm else 0,
+                },
+                "lstm_probs": lstm.get("probabilities", {}),
             }
             context = await invoke_context_graph(ticker=ticker, date=date)
 
@@ -277,12 +315,17 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = "",
             inference=inference, scoring=scoring, context=context,
         )
 
-        return {
+        result = {
             "analysis": analysis.get("analysis", ""),
             "source": analysis.get("source", "unknown"),
             "scoring": scoring,
             "context": context,
         }
+        # Pass viz data for human charts (batch only)
+        if batch and "analytics" in inference:
+            result["analytics"] = inference["analytics"]
+            result["predictions"] = inference["predictions"]
+        return result
     except Exception as e:
         logger.error(f"Error on /claude_analysis: {e}")
         return {"error": str(e)}

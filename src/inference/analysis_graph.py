@@ -81,21 +81,46 @@ async def build_prompt_node(state: AnalysisState) -> dict:
             f"LSTM → {p['lstm_prediction']} ({p['lstm_confidence']:.1%})"
             for p in preds
         )
+        # Batch analytics for Claude
+        analytics = inf.get("analytics", {})
+        bucket_dist = analytics.get("bucket_distribution", {})
+        agreement = analytics.get("agreement_rate", 0)
+        lgbm_stats = analytics.get("lgbm_confidence_stats", {})
+        lstm_stats = analytics.get("lstm_confidence_stats", {})
+
+        analytics_section = f"""
+**Batch Analytics:**
+  Bucket distribution: {', '.join(f'{k}: {v}' for k, v in bucket_dist.items())}
+  Model agreement rate: {agreement:.0%} (LGBM moneyness matches LSTM)
+  LGBM confidence: mean {lgbm_stats.get('mean', 0):.1%}, range [{lgbm_stats.get('min', 0):.1%} – {lgbm_stats.get('max', 0):.1%}]
+  LSTM confidence: mean {lstm_stats.get('mean', 0):.1%}, range [{lstm_stats.get('min', 0):.1%} – {lstm_stats.get('max', 0):.1%}]"""
+
         inference_section = f"""## Inference Results — ALL TICKERS @ {date}
 
-{pred_lines}"""
+{pred_lines}
+{analytics_section}"""
     else:
         lgbm_bucket = inf.get("model_bucket", "?")
         lgbm_conf = inf.get("model_confidence", 0)
         lstm_pred = inf.get("lstm_prediction", "?")
         lstm_conf = inf.get("lstm_confidence", 0)
+        lgbm_probs = inf.get("lgbm_probs", {})
+        lstm_probs = inf.get("lstm_probs", {})
+
+        prob_section = ""
+        if lgbm_probs:
+            prob_section += f"\n  LGBM probabilities: {', '.join(f'{k}: {v:.1%}' for k, v in lgbm_probs.items())}"
+        if lstm_probs:
+            top3 = sorted(lstm_probs.items(), key=lambda x: x[1], reverse=True)[:3]
+            prob_section += f"\n  LSTM top-3 probabilities: {', '.join(f'{k}: {v:.1%}' for k, v in top3)}"
+
         inference_section = f"""## Inference Results — {ticker} @ {date}
 
 **LGBM 3-Class Model** (production, macro F1: 0.59):
-  Prediction: {lgbm_bucket} | Confidence: {lgbm_conf:.1%}
+  Prediction: {lgbm_bucket} | Confidence: {lgbm_conf:.1%}{prob_section if lgbm_probs else ''}
 
 **LSTM-CNN 7-Class Model** (dashboard, macro F1: 0.11):
-  Prediction: {lstm_pred} | Confidence: {lstm_conf:.1%}"""
+  Prediction: {lstm_pred} | Confidence: {lstm_conf:.1%}{prob_section if lstm_probs and not lgbm_probs else ''}"""
 
     prompt = f"""You are a quantitative analyst at Validex Growth Investors reviewing covered call predictions.
 
