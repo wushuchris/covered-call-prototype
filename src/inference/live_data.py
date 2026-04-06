@@ -284,6 +284,54 @@ def _fetch_ticker_data(ticker: str, days: int = 400) -> dict:
         return {"prices": pd.DataFrame(), "fundamentals": {}, "options": pd.DataFrame()}
 
 
+def _compute_iv_rank_live(prices: pd.DataFrame, current_iv: float) -> tuple:
+    """Compute IV rank proxy and IV change from price data alone.
+
+    Uses realized volatility rank as a proxy for IV rank - no historical
+    store dependency. Realized vol and implied vol are highly correlated.
+
+    IV rank proxy = (current_rvol - 12mo_min_rvol) / (12mo_max - 12mo_min)
+    IV change proxy = current month's IV vs prior month's realized vol
+
+    Args:
+        prices: Daily OHLCV with at least 252 rows.
+        current_iv: Current IV mean from live options.
+
+    Returns:
+        Tuple of (iv_rank, iv_change).
+    """
+    try:
+        close = prices["close"].values
+        if len(close) < 63:
+            return 0.5, 0.0
+
+        returns = pd.Series(close).pct_change().dropna().values
+
+        # Rolling 21-day realized vol (annualized) over available history
+        vol_series = pd.Series(returns).rolling(21).std().dropna().values * np.sqrt(252)
+        if len(vol_series) < 21:
+            return 0.5, 0.0
+
+        current_rvol = float(vol_series[-1])
+        lookback = vol_series[-252:] if len(vol_series) >= 252 else vol_series
+        vol_min = float(lookback.min())
+        vol_max = float(lookback.max())
+        vol_range = vol_max - vol_min
+
+        iv_rank = (current_rvol - vol_min) / vol_range if vol_range > 0 else 0.5
+        iv_rank = max(0.0, min(1.0, iv_rank))  # clip to [0, 1]
+
+        # IV change: compare current IV to realized vol from ~21 days ago
+        prior_rvol = float(vol_series[-22]) if len(vol_series) >= 22 else current_rvol
+        iv_change = (current_iv - prior_rvol) / prior_rvol if prior_rvol > 0 else 0.0
+
+        return round(iv_rank, 4), round(iv_change, 4)
+
+    except Exception as e:
+        logger.warning(f"IV rank live computation failed: {e}")
+        return 0.5, 0.0
+
+
 # ── LGBM feature computation ────────────────────────────────────────────
 
 def _compute_lgbm_features(prices: pd.DataFrame, fundamentals: dict,
@@ -364,8 +412,11 @@ def _compute_lgbm_features(prices: pd.DataFrame, fundamentals: dict,
         feats["iv_short_std"] = float(short.std()) if len(short) > 1 else 0.0
         feats["iv_long_mean"] = float(long.mean()) if len(long) > 0 else feats["iv_mean"]
         feats["iv_term_structure"] = feats["iv_long_mean"] - feats["iv_short_mean"]
-        feats["iv_rank"] = 0.5  # can't compute percentile without history
-        feats["iv_change"] = 0.0  # can't compute MoM without prior month
+
+        # IV rank (realized vol proxy) + change - computed from prices alone
+        feats["iv_rank"], feats["iv_change"] = _compute_iv_rank_live(
+            prices, feats["iv_mean"],
+        )
     else:
         for k in ["iv_mean", "iv_median", "iv_skew", "iv_short_mean",
                    "iv_short_std", "iv_long_mean", "iv_term_structure",
