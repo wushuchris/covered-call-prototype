@@ -220,9 +220,9 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = "",
                 "lstm_prediction": "BATCH",
                 "lstm_confidence": 0,
             }
-            # No single-ticker context for batch
-            context = {"price": {}, "features": {}, "track_record": {},
-                       "insights_available": True}
+            # Context for top-confidence ticker (grounds the recommendation)
+            top = max(all_preds, key=lambda p: p.get("lgbm_confidence", 0))
+            context = await invoke_context_graph(ticker=top["ticker"], date=date)
         else:
             # Single ticker
             lgbm = lgbm_predict(ticker, date)
