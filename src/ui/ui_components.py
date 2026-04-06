@@ -903,9 +903,9 @@ def _model_sidebar():
         Card with filter controls.
     """
     sample_options = [
-        fh.Option("All", value="all", selected=True),
+        fh.Option("All", value="all"),
         fh.Option("Train Dataset", value="train"),
-        fh.Option("Test Dataset", value="test"),
+        fh.Option("Test Dataset", value="test", selected=True),
     ]
     year_options = [fh.Option("All Years", value="all", selected=True)] + [
         fh.Option(str(y), value=str(y)) for y in range(2008, 2026)
@@ -1035,6 +1035,23 @@ def model_performance_card(data: dict):
         sample_labels = {"all": "All Data", "train": "Train", "test": "Test", "validation": "Validation"}
         sample_label = sample_labels.get(sample_filter, sample_filter)
 
+        # Training scope disclaimer
+        disclaimer = Div(
+            P("These models were trained on different data, targets, and time periods — "
+              "direct comparison requires context.",
+              style="font-weight:600; margin-bottom:0.25rem;"),
+            P("LSTM-CNN: 35 daily features (price + fundamentals + FRED macro), "
+              "50-day sliding windows, 7-class target (moneyness x maturity). "
+              "Train: pre-2022 | Validation: 2022-2023 | Test: 2024.",
+              cls=TextPresets.muted_sm),
+            P("LGBM: 34 monthly features (technical + IV), single-row lookup, "
+              "3-class target (moneyness only, maturity via IV-rank rule). "
+              "Train: pre-2025 (walk-forward annual) | Test: 2025.",
+              cls=TextPresets.muted_sm),
+            style=f"background:{_TORERO}10; border-left:3px solid {_TORERO}; "
+                  "padding:0.75rem 1rem; border-radius:4px; margin-bottom:0.75rem;",
+        )
+
         # Two-column layout: LSTM (primary) | LGBM
         model_columns = Div(
             Div(
@@ -1062,18 +1079,43 @@ def model_performance_card(data: dict):
             for y in per_year
         ]
 
+        # Per-year breakdowns
+        year_header = ["Year", "Accuracy", "Macro F1", "Samples"]
+
+        lstm_per_year = lstm.get("per_year", [])
+        lstm_year_rows = [
+            {"Year": str(y["year"]), "Accuracy": f"{y['accuracy']:.1%}",
+             "Macro F1": f"{y['macro_f1']:.3f}", "Samples": str(y["n_samples"])}
+            for y in lstm_per_year
+        ]
+
+        lgbm_per_year = lgbm.get("per_year", [])
+        lgbm_year_rows = [
+            {"Year": str(y["year"]), "Accuracy": f"{y['accuracy']:.1%}",
+             "Macro F1": f"{y['macro_f1']:.3f}", "Samples": str(y["n_samples"])}
+            for y in lgbm_per_year
+        ]
+
+        show_yearly = year_filter == "all"
+
         return Div(
             Card(
                 P(f"{filter_label} | {sample_label}", cls=TextPresets.muted_sm),
                 DividerLine(),
+                disclaimer,
                 model_columns,
                 header=H4("Model Performance", style=f"color:{_FOUNDERS};"),
             ),
             Card(
-                TableFromDicts(header_data=year_header, body_data=year_rows),
+                TableFromDicts(header_data=year_header, body_data=lstm_year_rows),
+                header=H4("LSTM-CNN Performance by Year", style=f"color:{_FOUNDERS};"),
+                cls="mt-2",
+            ) if show_yearly and lstm_year_rows else "",
+            Card(
+                TableFromDicts(header_data=year_header, body_data=lgbm_year_rows),
                 header=H4("LGBM Performance by Year", style=f"color:{_FOUNDERS};"),
                 cls="mt-2",
-            ) if year_filter == "all" and year_rows else "",
+            ) if show_yearly and lgbm_year_rows else "",
         )
 
     except Exception:
