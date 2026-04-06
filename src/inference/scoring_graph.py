@@ -224,9 +224,10 @@ async def risk_adjusted_node(state: ScoringState) -> dict:
 
 
 async def preset_strategies_node(state: ScoringState) -> dict:
-    """Run Conservative, Balanced, Aggressive presets via the scoring engine.
+    """Run Conservative preset via the scoring engine.
 
     Uses full scoring (TC + delta-hedge + confidence) and maturity-aware returns.
+    Balanced/Aggressive removed per team decision — Conservative only.
     """
     from src.inference.scoring import score_month, allocate
 
@@ -237,7 +238,7 @@ async def preset_strategies_node(state: ScoringState) -> dict:
         return {"preset_results": {}}
 
     results = {}
-    for preset in ["conservative", "balanced", "aggressive"]:
+    for preset in ["conservative"]:
         try:
             scored = score_month(month_data, prev_buckets={}, preset=preset)
             allocated = allocate(scored, budget=100_000, preset=preset)

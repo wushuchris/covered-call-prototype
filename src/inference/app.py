@@ -172,15 +172,18 @@ async def context_endpoint(ticker: str = "", date: str = ""):
 
 
 @app.get("/claude_analysis")
-async def claude_analysis_endpoint(ticker: str = "", date: str = ""):
+async def claude_analysis_endpoint(ticker: str = "", date: str = "",
+                                   batch: str = ""):
     """Run full analysis pipeline — scoring + context + Claude synthesis.
 
-    Invokes scoring and context graphs, then feeds everything into
-    the Claude analysis graph for a recommended action report.
+    Single ticker: inference + context for that ticker, scoring for the month.
+    Batch (all tickers): inference for all tickers, scoring for the month,
+    context omitted (portfolio-level), Claude gets the full picture.
 
     Args:
-        ticker: Stock symbol.
+        ticker: Stock symbol (ignored if batch).
         date: Date string (YYYY-MM-DD).
+        batch: Non-empty string triggers batch mode.
 
     Returns:
         Dict with 'analysis' text, 'scoring', and 'context'.
@@ -189,23 +192,53 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = ""):
         from src.inference.model import predict_bucket as lgbm_predict
         from src.inference.lstm_model import predict_bucket as lstm_predict
 
-        # Re-fetch inference results (cheap row lookups)
-        lgbm = lgbm_predict(ticker, date)
-        lstm = lstm_predict(ticker, date)
-        inference = {
-            "model_bucket": lgbm.get("model_bucket", "?"),
-            "model_confidence": lgbm.get("model_confidence", 0),
-            "lstm_prediction": lstm.get("predicted_class", "?"),
-            "lstm_confidence": lstm.get("confidence", 0),
-        }
+        UNIVERSE = ["AAPL", "AMZN", "AVGO", "GOOG", "GOOGL",
+                     "META", "MSFT", "NVDA", "TSLA", "WMT"]
 
-        # Run scoring and context graphs
-        scoring = await invoke_scoring_graph(ticker=ticker, date=date)
-        context = await invoke_context_graph(ticker=ticker, date=date)
+        # Scoring is always portfolio-level (all tickers for the month)
+        scoring = await invoke_scoring_graph(ticker=ticker or "AAPL", date=date)
 
-        # Run Claude analysis graph
+        if batch:
+            # Batch: gather predictions for all tickers
+            all_preds = []
+            for t in UNIVERSE:
+                lgbm = lgbm_predict(t, date)
+                lstm = lstm_predict(t, date)
+                all_preds.append({
+                    "ticker": t,
+                    "lgbm_bucket": lgbm.get("model_bucket", "?"),
+                    "lgbm_confidence": lgbm.get("model_confidence", 0),
+                    "lstm_prediction": lstm.get("predicted_class", "?"),
+                    "lstm_confidence": lstm.get("confidence", 0),
+                })
+
+            inference = {
+                "batch": True,
+                "predictions": all_preds,
+                "model_bucket": "BATCH",
+                "model_confidence": 0,
+                "lstm_prediction": "BATCH",
+                "lstm_confidence": 0,
+            }
+            # No single-ticker context for batch
+            context = {"price": {}, "features": {}, "track_record": {},
+                       "insights_available": True}
+        else:
+            # Single ticker
+            lgbm = lgbm_predict(ticker, date)
+            lstm = lstm_predict(ticker, date)
+            inference = {
+                "ticker": ticker,
+                "model_bucket": lgbm.get("model_bucket", "?"),
+                "model_confidence": lgbm.get("model_confidence", 0),
+                "lstm_prediction": lstm.get("predicted_class", "?"),
+                "lstm_confidence": lstm.get("confidence", 0),
+            }
+            context = await invoke_context_graph(ticker=ticker, date=date)
+
         analysis = await invoke_analysis_graph(
-            ticker=ticker, date=date,
+            ticker=ticker if not batch else "ALL",
+            date=date,
             inference=inference, scoring=scoring, context=context,
         )
 

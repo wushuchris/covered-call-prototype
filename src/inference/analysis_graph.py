@@ -60,12 +60,6 @@ async def build_prompt_node(state: AnalysisState) -> dict:
     ctx = state["context"]
     insights = _get_insights()
 
-    # Extract key data points
-    lgbm_bucket = inf.get("model_bucket", "?")
-    lgbm_conf = inf.get("model_confidence", 0)
-    lstm_pred = inf.get("lstm_prediction", "?")
-    lstm_conf = inf.get("lstm_confidence", 0)
-
     # Scoring summary
     baseline_ret = scr.get("baseline", {}).get("return", 0)
     argmax_ret = scr.get("argmax", {}).get("return", 0)
@@ -77,17 +71,35 @@ async def build_prompt_node(state: AnalysisState) -> dict:
     features = ctx.get("features", {})
     track = ctx.get("track_record", {})
     iv_data = features.get("iv", {})
-    tech_data = features.get("technical", {})
 
-    prompt = f"""You are a quantitative analyst at Validex Growth Investors reviewing covered call predictions.
+    # Build inference section based on single vs batch
+    is_batch = inf.get("batch", False)
+    if is_batch:
+        preds = inf.get("predictions", [])
+        pred_lines = "\n".join(
+            f"  {p['ticker']}: LGBM → {p['lgbm_bucket']} ({p['lgbm_confidence']:.1%}) | "
+            f"LSTM → {p['lstm_prediction']} ({p['lstm_confidence']:.1%})"
+            for p in preds
+        )
+        inference_section = f"""## Inference Results — ALL TICKERS @ {date}
 
-## Inference Results — {ticker} @ {date}
+{pred_lines}"""
+    else:
+        lgbm_bucket = inf.get("model_bucket", "?")
+        lgbm_conf = inf.get("model_confidence", 0)
+        lstm_pred = inf.get("lstm_prediction", "?")
+        lstm_conf = inf.get("lstm_confidence", 0)
+        inference_section = f"""## Inference Results — {ticker} @ {date}
 
 **LGBM 3-Class Model** (production, macro F1: 0.59):
   Prediction: {lgbm_bucket} | Confidence: {lgbm_conf:.1%}
 
 **LSTM-CNN 7-Class Model** (dashboard, macro F1: 0.11):
-  Prediction: {lstm_pred} | Confidence: {lstm_conf:.1%}
+  Prediction: {lstm_pred} | Confidence: {lstm_conf:.1%}"""
+
+    prompt = f"""You are a quantitative analyst at Validex Growth Investors reviewing covered call predictions.
+
+{inference_section}
 
 ## Strategy Scoring (this month, all tickers)
 
@@ -97,10 +109,8 @@ async def build_prompt_node(state: AnalysisState) -> dict:
 | Argmax | {argmax_ret:.4%} |
 | Risk-Adjusted | {risk_adj_ret:.4%} |
 | Conservative | {presets.get('conservative', {}).get('return', 0):.4%} |
-| Balanced | {presets.get('balanced', {}).get('return', 0):.4%} |
-| Aggressive | {presets.get('aggressive', {}).get('return', 0):.4%} |
 
-## Market Context — {ticker}
+{"" if is_batch else f"""## Market Context — {ticker}
 
 **Price regime:** {price.get('trend', '?')} trend, {price.get('vol_regime', '?')} volatility
   - Current: ${price.get('current_price', '?')} | 20d vol: {price.get('vol_20d', 0):.1%} | 60d vol: {price.get('vol_60d', 0):.1%}
@@ -111,7 +121,7 @@ async def build_prompt_node(state: AnalysisState) -> dict:
 **Model track record for {ticker}:**
   Overall accuracy: {track.get('overall_accuracy', '?')} | Recent 12m: {track.get('recent_12m_accuracy', '?')}
   Avg confidence when correct: {track.get('avg_confidence_when_correct', '?')} | when wrong: {track.get('avg_confidence_when_incorrect', '?')}
-
+"""}
 ## Key Project Insights (from capstone research)
 
 - Distribution shift is the #1 limitation: OTM10_60_90 went from 1.25% to 53.15% of test data
@@ -126,18 +136,17 @@ async def build_prompt_node(state: AnalysisState) -> dict:
 Write a report with two clearly labeled sections:
 
 ### OVERVIEW
-Distill the market context for {ticker} into 2-3 sentences a portfolio manager can scan in 10 seconds.
-Cover: current regime (trend + volatility), IV positioning, how the models read this environment,
-and whether the strategy scoring supports or contradicts the model picks this month.
+{"Summarize the portfolio-level view for all 10 tickers" if is_batch else f"Distill the market context for {ticker}"} into 2-3 sentences a portfolio manager can scan in 10 seconds.
+Cover: {"model agreement/disagreement patterns across the universe, which tickers stand out, and how strategy scoring compares to baseline this month." if is_batch else "current regime (trend + volatility), IV positioning, how the models read this environment, and whether the strategy scoring supports or contradicts the model picks this month."}
 Use numbers, not vague language.
 
 ### RECOMMENDED ACTION
-State the specific bucket to trade (e.g. "Sell OTM5 short-dated calls") and your confidence level (HIGH / MEDIUM / LOW).
+{"For the portfolio: state which tickers to prioritize, which bucket(s) to trade, and your overall confidence level (HIGH / MEDIUM / LOW). Note any tickers where models strongly disagree or where the baseline clearly dominates." if is_batch else "State the specific bucket to trade (e.g. 'Sell OTM5 short-dated calls') and your confidence level (HIGH / MEDIUM / LOW)."}
 Then in 2-3 sentences explain why: which model(s) support it, how it compares to the baseline,
 and what the key risk is. If models disagree or confidence is low, say so plainly and suggest
 defaulting to OTM10 baseline with an explanation.
 
-End with one sentence on the most important limitation the trader should know for THIS specific prediction.
+End with one sentence on the most important limitation the trader should know for {"this portfolio" if is_batch else "THIS specific prediction"}.
 
 Be direct, quantitative, and honest about uncertainty. This is for institutional money managers."""
 

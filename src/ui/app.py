@@ -213,10 +213,10 @@ async def post(date: str = "", ticker: str = "", batch: str = ""):
 
 @rt("/claude_analysis_call")
 @log_call(logger)
-async def get(ticker: str = "", date: str = ""):
+async def get(ticker: str = "", date: str = "", batch: str = ""):
     """Handle Claude analysis request, fired automatically after inference renders."""
     try:
-        result = await handle_claude_analysis(ticker=ticker, date=date)
+        result = await handle_claude_analysis(ticker=ticker, date=date, batch=batch)
         if "error" in result:
             return claude_analysis_card(result)
         return claude_analysis_card(result)

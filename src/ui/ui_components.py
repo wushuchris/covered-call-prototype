@@ -680,6 +680,28 @@ def batch_results_card(data: dict):
                 id=detail_modal_id,
                 dialog_cls="uk-modal-dialog-large",
             ),
+            # OOB trigger for Claude analysis (batch mode)
+            Div(
+                Card(
+                    Div(
+                        Loading(),
+                        P("Analyzing all tickers...", cls=TextPresets.muted_sm,
+                          style="text-align:center; margin-top:0.5rem;"),
+                        style="padding:1rem 0;",
+                    ),
+                    header=Div(
+                        UkIcon("brain", height=20, width=20),
+                        H4(" Claude Analysis", style=f"color:{_FOUNDERS}; display:inline;"),
+                        style="display:flex; align-items:center; gap:0.5rem;",
+                    ),
+                ),
+                hx_get=f"/claude_analysis_call?date={batch_date}&batch=true",
+                hx_trigger="load",
+                hx_swap="innerHTML",
+                id="claude-analysis",
+                hx_swap_oob="true",
+                style="margin-top:1rem;",
+            ),
         )
 
     except Exception:
@@ -759,12 +781,12 @@ def backtest_results_card(data: dict, mode: str = "absolute"):
         Div with two strategy comparison tables.
     """
     try:
-        n_months = data.get("n_months", 0)
         year = data.get("year", "all")
-        date_range = data.get("date_range", {})
         lgbm = data.get("lgbm", {})
         lstm = data.get("lstm", {})
         baseline_m = data.get("baseline", {}).get("metrics", {})
+        lgbm_r = data.get("lgbm_range", {})
+        lstm_r = data.get("lstm_range", {})
         is_delta = mode == "delta"
 
         def fmt_pct(v): return f"{v:.1%}"

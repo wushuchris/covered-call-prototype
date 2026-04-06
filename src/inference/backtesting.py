@@ -443,14 +443,23 @@ async def run_backtest_all(budget: float = 100_000, year: str = "all",
             lstm_report = _run_backtest_loop(lstm_monthly, budget, "conservative")
 
         # ── Combine ──
-        date_range_start = str(fs["year_month"].min())
-        date_range_end = str(fs["year_month"].max())
+        lgbm_months = len(fs["year_month"].unique())
+        lstm_months = len(lstm_monthly["year_month"].unique()) if not lstm_monthly.empty else 0
 
         combined = {
             "year": year,
             "budget": budget,
-            "n_months": len(fs["year_month"].unique()),
-            "date_range": {"start": date_range_start, "end": date_range_end},
+            "n_months": lgbm_months,
+            "lgbm_range": {
+                "start": str(fs["year_month"].min()),
+                "end": str(fs["year_month"].max()),
+                "n_months": lgbm_months,
+            },
+            "lstm_range": {
+                "start": str(lstm_monthly["year_month"].min()) if not lstm_monthly.empty else "—",
+                "end": str(lstm_monthly["year_month"].max()) if not lstm_monthly.empty else "—",
+                "n_months": lstm_months,
+            },
             # LGBM strategies
             "lgbm": {
                 "baseline": lgbm_report["baseline"],
