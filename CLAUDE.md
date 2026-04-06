@@ -121,8 +121,8 @@ All strategies run on both LGBM and LSTM-CNN predictions separately.
 
 | Model | File | Test Macro F1 | Status |
 |-------|------|---------------|--------|
-| LightGBM walk-forward | `lgbm_3class_moneyness.joblib` | 0.47 (walk-forward) / 0.59 (2025 test) | Production |
-| LSTM-CNN regularised | `lstm_cnn_best_model.pth` | 0.11 (7-class) | Dashboard only |
+| LightGBM walk-forward | `lgbm_3class_moneyness.joblib` | 0.47 (walk-forward) / 0.59 (2025 test) | Production (secondary) |
+| LSTM-CNN best | `lstm_cnn_best_model.pth` | 0.11 (7-class) | Production (primary) - same as Streamlit |
 
 ---
 
@@ -142,6 +142,9 @@ data/processed/
     options_clean.parquet        - cleaned options chains
     modeling_data.parquet        - daily features + labels (29K rows)
     monthly_labels.parquet       - monthly labels (1,391 rows)
+    feature_store.parquet        - LGBM precomputed predictions (1,391 rows)
+    lstm_feature_store.parquet   - LSTM-CNN precomputed predictions (~37K rows)
+    lstm_scaler.joblib           - StandardScaler for live LSTM inference
 
 models/
     lgbm_3class_moneyness.joblib   - production model (34 features, walk-forward trained)
@@ -149,6 +152,9 @@ models/
 
 saved_models/
     lstm_cnn_best_model.pth        - team's LSTM-CNN (7-class, deployed on Streamlit)
+
+final_datasets/
+    daily_stock_optimal_bucket_modeling_with_fred.parquet - LSTM source data (41K daily rows, 35 features + FRED)
 
 src/data/
     bucket_returns.parquet         - per-bucket realized returns for backtesting

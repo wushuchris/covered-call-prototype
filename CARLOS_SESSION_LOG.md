@@ -385,12 +385,20 @@ Two parallel Claude sessions running simultaneously on the same branch. This ses
 - Dashboard tooltips across all UI sections
 - Dual-model backtesting dashboards (LSTM first, LGBM second)
 
+**Live pipeline fixes (same session, parallel Claude):**
+- Fixed iv_rank: replaced hardcoded 0.5 with realized volatility rank proxy computed from 252 days of live price data. No historical store dependency. Maturity rule now responds to actual market conditions.
+- Fixed LSTM live predictions: fundamentals now fetched from yfinance balance_sheet/financials (not info dict which had missing fields), producing diverse 7-class predictions instead of all ATM_30.
+- Batch price pre-fetch: `yf.download()` single call for all 10 tickers (~1s), individual ticker fetches hit cache. Batch live dropped from ~25s to ~13s.
+- Per-model live detection: each model node checks its own store's date range independently. LGBM goes live at >2025-12, LSTM at >2024-12. Mixed mode works correctly.
+- All 6 scenarios tested and passing: single/batch x historical/mixed/live. Zero errors.
+
 **Known limitations:**
-- Live pipeline hardcodes iv_rank=0.5 (can't compute 12-month percentile without historical IV), causing all tickers to get LONG maturity
+- LSTM fundamentals are constant across the 50-day window (quarterly data doesn't change daily) - correct but 16/35 features have zero variance in live windows
+- Realized vol rank is a proxy for IV rank - correlated but not identical to what the model was trained on
 - Claude API costs ~$0.001-0.01 per call (Haiku). $10 prepaid credits, no auto-reload.
 - Batch Claude analysis runs 10 context graph invocations sequentially (could be parallelized)
 
-**Next session priority**: Test live inference end-to-end, address iv_rank hardcode in live pipeline, consider adding more context to Claude prompt (per-ticker IV from live options data)
+**Next session priority**: Polish docs content for final submission, consider parallelizing batch context calls, explore contract-level dataset redesign (Idea 1)
 
 ---
 
