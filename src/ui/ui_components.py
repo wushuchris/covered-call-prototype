@@ -428,10 +428,10 @@ def claude_analysis_card(data: dict):
             ),
         )
 
-        # Layout: context (left) + scoring (right), analysis full width below
+        # Layout: context (left, 2/3) + scoring (right, 1/3), analysis full width below
         return Div(
             Div(
-                Div(context_card, style="flex:1;"),
+                Div(context_card, style="flex:2;"),
                 Div(scoring_card, style="flex:1;"),
                 style="display:flex; gap:1rem;",
             ),
