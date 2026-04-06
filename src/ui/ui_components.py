@@ -978,19 +978,28 @@ def _model_summary_block(d: dict, classes: list):
     # Summary row
     summary = Div(
         *[Div(
-            P(Strong(label), cls=TextPresets.muted_sm, style="margin-bottom:0.25rem;"),
+            P(Strong(label), _tip(tip), cls=TextPresets.muted_sm, style="margin-bottom:0.25rem;"),
             P(val, style="font-size:1.3rem; font-weight:600; margin:0;"),
             style="text-align:center; padding:0.5rem;",
-        ) for label, val in [
-            ("Accuracy", f"{d.get('accuracy', 0):.1%}"),
-            ("Macro F1", f"{d.get('macro_f1', 0):.3f}"),
-            ("Samples", f"{d.get('n_samples', 0):,}"),
+        ) for label, val, tip in [
+            ("Accuracy", f"{d.get('accuracy', 0):.1%}",
+             "How often the model picks the correct bucket overall."),
+            ("Macro F1", f"{d.get('macro_f1', 0):.3f}",
+             "Average F1 across all classes, weighted equally. Balances how precise and how complete the model is. Random guessing would score ~0.14 for 7 classes or ~0.33 for 3 classes."),
+            ("Samples", f"{d.get('n_samples', 0):,}",
+             "Number of predictions evaluated in this view."),
         ]],
         style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.5rem;",
     )
 
     # Per-class table
-    pc_header = Tr(Th("Class"), Th("Prec"), Th("Recall"), Th("F1"), Th("Support"))
+    pc_header = Tr(
+        Th("Class"),
+        Th(Span("Prec", _tip("Of all times the model predicted this class, how often was it actually correct."))),
+        Th(Span("Recall", _tip("Of all real instances of this class, how many did the model find."))),
+        Th(Span("F1", _tip("Balance between precision and recall. 1.0 is perfect."))),
+        Th(Span("Support", _tip("How many times this class actually appeared in the data."))),
+    )
     pc_rows = []
     for cls in classes:
         m = d.get("per_class", {}).get(cls, {})
@@ -1002,7 +1011,10 @@ def _model_summary_block(d: dict, classes: list):
 
     # Confidence
     conf_line = P(
-        f"Confidence — correct: {conf.get('avg_when_correct', 0):.1%}, "
+        Span("Confidence", _tip(
+            "Average model certainty when it gets the answer right vs wrong. "
+            "If these numbers are close, the model can't tell when it's guessing.")),
+        f" — correct: {conf.get('avg_when_correct', 0):.1%}, "
         f"incorrect: {conf.get('avg_when_incorrect', 0):.1%}, "
         f"overall: {conf.get('overall_avg', 0):.1%}",
         cls=TextPresets.muted_sm, style="margin-top:0.5rem;",
