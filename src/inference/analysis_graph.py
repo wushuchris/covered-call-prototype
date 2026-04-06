@@ -173,9 +173,9 @@ Use numbers, not vague language.
 
 {"""**Recommended Positions:**
 
-| Ticker | Bucket | LGBM Conf | Action | Note |
-|--------|--------|-----------|--------|------|
-| (fill for each ticker worth trading) | | | Trade / Default to OTM10 / Skip | (brief reason) |
+| Ticker | Bucket | LGBM Conf | LSTM Conf | Agree? | Action | Note |
+|--------|--------|-----------|-----------|--------|--------|------|
+| (fill for each ticker) | | | | Y/N | Trade / Default to OTM10 / Skip | (brief reason) |
 
 **Capital Allocation:**
 
