@@ -333,6 +333,65 @@ Ship date session. Focused on closing gaps in the backtesting pipeline, wiring M
 
 **Next session priority**: Docs content revamp (update text for new strategies, add missing figures), LSTM-CNN remote endpoint integration when teammate confirms API is live
 
+### 2026-04-05/06 - Session 6: Four-Graph LangGraph Pipeline, Claude AI Analysis, Decision-Support Reframing
+
+Two parallel Claude sessions running simultaneously on the same branch. This session focused on the analysis pipeline and decision-support framing. The parallel session handled live inference (yfinance + FRED), dashboard tooltips, and UI polish.
+
+**Four-graph LangGraph pipeline (new):**
+- Graph 1 (inference, existed): LGBM + LSTM-CNN in parallel via LangGraph DAG
+- Graph 2 (scoring_graph.py): dual-model strategy scoring. Loads both LGBM and LSTM feature stores, runs Baseline + Argmax + Risk-Adjusted + Conservative for each model in parallel. Balanced/Aggressive removed per team decision.
+- Graph 3 (context_graph.py): market context. Trailing 60d price regime (trend, volatility, drawdown), LGBM feature store row (34 features: IV, technicals, fundamentals), model track record per ticker. Batch mode aggregates all 10 tickers into portfolio summary.
+- Graph 4 (analysis_graph.py): Claude AI analysis. Builds structured prompt from Graphs 1-3 + capstone insights, calls Claude Haiku via anthropic SDK (API key in src/.env, gitignored). Returns OVERVIEW (prose) + RECOMMENDED ACTION (tabular) + RATIONALE (prose) + CRITICAL RISK (prose). max_tokens=2048.
+
+**Endpoints added:**
+- GET /scoring - dual-model strategy scoring
+- GET /context - market regime, features, track record
+- GET /claude_analysis - chains all 3 graphs, supports batch param for portfolio-level analysis
+
+**UI changes:**
+- Reframed from "USD Trader" to "USD Strategy Advisor" throughout
+- "Historical Inference" -> "Strategy Diagnostic"
+- "Compute Inference" -> "Run Diagnostic"
+- Claude analysis card: renders markdown via render_md(), shows OVERVIEW + tables + RATIONALE + CRITICAL RISK
+- Market Context card (left, 2/3 width): trend, vol regime, realized vol, IV rank, model accuracy
+- Strategy Scoring card (right, 1/3 width): LSTM-CNN | LGBM columns, 4 strategies
+- Batch viz cards (ApexCharts, batch only): Confidence Heatmap (10 tickers x 2 models), LSTM-CNN Predicted Classes bar chart
+- Portfolio Context in batch mode: aggregated regime signals across all tickers
+- Layout: context + scoring (row 1), viz charts (row 2, batch only), Claude analysis (row 3)
+
+**Capstone report fact-check:**
+- Extracted insights from 20-page PDF into src/inference/capstone_insights.md
+- Compared newer_version_reference_doc.docx against actual notebooks
+- Created paper_fact_check.txt for teammates: 14 verified, 5 stale (project evolved), 5 errors
+- Key errors: LSTM hidden=128 not 64, CNN branch omitted from paper, early stopping epoch 11 not 7
+- Insights file loaded as static context for Claude analysis prompt
+
+**Docs sections updated:**
+- Overview: reframed as decision-support tool, mentions LangGraph + Claude analysis
+- Data Pipeline: fixed stale numbers (52,486 daily, 1.12M options, 1,391 monthly points, 34/35 features)
+- Strategy: reframed as diagnostic layer
+- Results: renamed to "Results & Limitations", added "Implications for Decision Support" section
+
+**Conventions enforced:**
+- Removed all em dashes from UI (~94 instances) and CLAUDE.md, replaced with proper punctuation
+- Added no-emdash rule to CLAUDE.md Python Conventions
+- No Co-Authored-By tags on commits
+
+**Dependencies added:** anthropic, python-dotenv (for Claude API)
+
+**Parallel session (other Claude) built during this session:**
+- live_data.py: yfinance + Black-Scholes + FRED for live dates
+- graph.py: live detection per model node (branches to live fetch when date exceeds feature store range)
+- Dashboard tooltips across all UI sections
+- Dual-model backtesting dashboards (LSTM first, LGBM second)
+
+**Known limitations:**
+- Live pipeline hardcodes iv_rank=0.5 (can't compute 12-month percentile without historical IV), causing all tickers to get LONG maturity
+- Claude API costs ~$0.001-0.01 per call (Haiku). $10 prepaid credits, no auto-reload.
+- Batch Claude analysis runs 10 context graph invocations sequentially (could be parallelized)
+
+**Next session priority**: Test live inference end-to-end, address iv_rank hardcode in live pipeline, consider adding more context to Claude prompt (per-ticker IV from live options data)
+
 ---
 
 ## Proposed Dataset Redesign (TEAM DECISION REQUIRED)

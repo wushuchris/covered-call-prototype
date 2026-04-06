@@ -2,8 +2,8 @@
 
 ## Project Overview
 
-ML-Driven Covered Call Optimization for AAI-590 Capstone (USD / Validex Growth Investors).
-Predicts which moneyness bucket (ATM, OTM5, OTM10) yields the best covered call return each month for 10 large-cap U.S. stocks.
+ML-Driven Covered Call Decision Support for AAI-590 Capstone (USD / Validex Growth Investors).
+Decision-support diagnostic tool, not an automated trading signal. Predicts which moneyness bucket (ATM, OTM5, OTM10) yields the best covered call return each month for 10 large-cap U.S. stocks, then presents analysis alongside strategy scoring, market context, and model limitations.
 
 **Ship date**: April 4, 2026.
 **Branch**: `carlos` (infrastructure & utilities).
@@ -21,33 +21,50 @@ deploy/setup_services.sh         - systemd (gunicorn + uvicorn), auto-start
 
 src/
 ├── utils.py                     - logger, log_call decorator, ServiceRequest (shared Pydantic model)
-├── data/                        - computed parquets (bucket_returns)
+├── data/                        - computed parquets (bucket_returns), capstone_insights.md
 ├── ui/
 │   ├── app.py                   - FastHTML :8008 (routes, USD branding, local fonts)
-│   ├── ui_components.py         - MonsterUI component tree (launcher, trading, docs screens)
+│   ├── ui_components.py         - MonsterUI component tree (launcher, diagnostic, docs screens)
 │   ├── ui_handler.py            - aiohttp bridge to inference service
 │   ├── ui_utils.py              - pack_request, send_to_inference
-│   └── static/                  - logo, fonts (served locally, no external API calls)
+│   └── static/                  - logo, fonts, capstone PDF (served locally)
 └── inference/
-    ├── app.py                   - FastAPI :8009 (/inference, /inference_batch, /backtest, /model_metrics, /chart_data)
-    ├── model.py                 - model loading, feature store, predict_bucket(), compute_model_metrics()
+    ├── app.py                   - FastAPI :8009 (all endpoints including /scoring, /context, /claude_analysis)
+    ├── graph.py                 - Graph 1: LangGraph DAG for dual-model inference (LGBM + LSTM-CNN parallel)
+    ├── scoring_graph.py         - Graph 2: dual-model strategy scoring (Baseline, Argmax, Risk-Adjusted, Conservative)
+    ├── context_graph.py         - Graph 3: market context (price regime, features, model track record)
+    ├── analysis_graph.py        - Graph 4: Claude AI analysis (Haiku API, OVERVIEW + RECOMMENDED ACTION)
+    ├── claude_analysis.py       - legacy stub (superseded by analysis_graph.py)
+    ├── model.py                 - LGBM loading, feature store, predict_bucket(), compute_model_metrics()
+    ├── lstm_model.py            - LSTM-CNN loading, feature store, predict_bucket(), get_monthly_predictions()
+    ├── live_data.py             - yfinance + Black-Scholes + FRED for live dates beyond feature store range
     ├── daily.py                 - single-day + batch inference orchestration
     ├── chart.py                 - OHLC candlestick data builder
-    ├── strategy.py              - simulate_inference() wrapper (NautilusTrader removed)
+    ├── strategy.py              - simulate_inference() wrapper
     ├── scoring.py               - composable scoring engine (confidence, TC, delta-hedge)
-    ├── backtesting.py           - backtest loop + caching (Argmax, Risk-Adjusted, 3 presets)
+    ├── backtesting.py           - backtest loop + caching (dual-model, Conservative only)
+    ├── mlflow_reader.py         - reads mlruns/ flat-file backend directly
     ├── inference_utils.py       - input validation
+    ├── capstone_insights.md     - extracted report insights for Claude analysis context
     └── nautilus_reference.py    - commented-out NautilusTrader class (reference only)
 ```
 
-### Data Flow
+### Data Flow (Four-Graph Pipeline)
 
 ```
-User sidebar → POST /inference_call → ui_handler.pack_request()
-    → aiohttp POST to :8009/inference (ServiceRequest body)
-    → daily.run_daily_inference() → strategy.simulate_inference() → model.predict_bucket()
-    → JSON response → ui_handler → inference_results_card() → htmx swap
+User sidebar -> POST /inference_call -> ui_handler -> aiohttp POST :8009/inference
+    -> Graph 1 (inference): validate -> [LGBM, LSTM-CNN] parallel -> aggregate
+    -> JSON response -> inference_results_card() -> htmx swap (immediate)
+
+Then automatically (hx-trigger="load" on render):
+    -> GET /claude_analysis -> runs Graph 2 + Graph 3 + Graph 4 sequentially:
+        Graph 2 (scoring): load_data -> [baseline, lgbm_strategies, lstm_strategies] parallel -> aggregate
+        Graph 3 (context): [price_context, feature_context, track_record] parallel -> aggregate
+        Graph 4 (Claude): build_prompt -> call_claude_haiku -> format_response
+    -> JSON response -> claude_analysis_card() -> htmx swap into #claude-analysis
 ```
+
+UI renders progressively: model predictions first, then scoring + context + Claude analysis.
 
 ### Inter-Service Communication
 
@@ -69,7 +86,7 @@ These are non-negotiable. Taken from `persistence_agent/microservices_grounding.
 7. **Readable** - Teammates must be able to understand the code and follow along. If things get too abstract, simplify.
 8. **Docstrings** - On all relevant functions.
 9. **Try-except** - On all service entry points and anywhere failure should be logged rather than crash.
-10. **Minimal dependencies** - FastHTML, MonsterUI, FastAPI, Pydantic, LightGBM, scikit-learn, joblib. Do not add new deps without explicit approval.
+10. **Minimal dependencies** - FastHTML, MonsterUI, FastAPI, Pydantic, LightGBM, scikit-learn, joblib, torch, langgraph, anthropic, python-dotenv, yfinance, scipy, fredapi. Do not add new deps without explicit approval.
 11. **UI blocks during requests** - Temporary blocks on interactive elements until the previous response finishes rendering. If something fails, a generic fallback Div keeps the chain going.
 
 ---
@@ -85,13 +102,14 @@ Three weighted score components per ticker per month:
 2. **Transaction Cost** - bid-ask spread + turnover penalty
 3. **Delta-Hedged Return** - vol premium after removing directional exposure
 
-### Strategy Presets
+### Strategy Preset
 
 | Preset | Confidence | TC | Delta-Hedge | Positions | Sizing |
 |--------|-----------|-----|-------------|-----------|--------|
 | Conservative | 30% | 50% | 20% | 7 | Equal |
-| Balanced | 33% | 33% | 34% | 5 | Equal |
-| Aggressive | 60% | 10% | 30% | 3 | Proportional |
+
+Balanced and Aggressive presets were removed. Conservative is the production preset.
+All strategies run on both LGBM and LSTM-CNN predictions separately.
 
 ### Additional Strategies (no scoring)
 
@@ -147,7 +165,7 @@ reports/figures/                 - all PNGs for /docs screen
 - **Try-except with logging** on all service entry points.
 - **Ruff** for linting (`ruff check`).
 - **No testing framework** - happy-path diagnostic scripts only. If it breaks on the happy path, log it and fix it.
-- **Informal git commits** - no conventional commit enforcement.
+- **Informal git commits** - no conventional commit enforcement. No Co-Authored-By tags.
 - **No em dashes** - use hyphens (`-`) or rephrased sentences. Never use `—` in code, UI text, comments, or docs.
 
 ---
