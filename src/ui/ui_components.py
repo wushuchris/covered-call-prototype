@@ -124,8 +124,6 @@ def trading_screen():
             Div(
                 _daily_inference_section(),
                 DividerLine(),
-                _backtesting_section(),
-                DividerLine(),
                 _docs_footer(),
                 cls="space-y-4 px-4 py-4 w-full max-w-full",
             ),
@@ -138,7 +136,6 @@ def _navbar():
     """Top navigation bar with scrollspy anchors and home icon."""
     return NavBar(
         A("Historical Inference", href="#daily-inference"),
-        A("Backtesting", href="#backtesting"),
         A("Docs", href="/docs"),
         brand=A(
             DivLAligned(
@@ -604,70 +601,9 @@ def batch_results_card(data: dict):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# backtesting dashboards
+# Dashboard sub-components (sidebar + results panels)
+# Used by the dashboard doc sections (dash-strategy, dash-model, dash-mlflow)
 # ═══════════════════════════════════════════════════════════════════════════════
-
-# the backtesting dashboards section should be based upon the MonsterUI dashboard example (https://monsterui.answer.ai/dashboard/)
-# and allow the user to understand (four different sections):
-
-# overall system performance (in terms of profit and risk), per stock performance (dropdown), baseline statistics
-# (what calls the system made the most, etc), baseline statistics in terms of the EDA
-
-def _backtesting_section():
-    """Backtesting dashboards with tabbed layout.
-
-    Three tabs: Strategy, Model Performance, MLflow.
-    UIKit uk-tab + uk-switcher handles tab switching (zero JS).
-    Each pane has its own sidebar + results grid.
-
-    Returns:
-        Section Div.
-    """
-    return Section(
-        H3("Dashboards", style=f"color:{_FOUNDERS};"),
-        P("Strategy backtesting, model evaluation, and experiment tracking.", cls=TextPresets.muted_sm),
-        DividerLine(),
-        # Tab headers
-        Ul(
-            Li(A("Strategy"), cls="uk-active"),
-            Li(A("Model Performance")),
-            Li(A("MLflow")),
-            uk_tab="",
-        ),
-        # Tab panes
-        Ul(
-            # Tab 1: Strategy (existing)
-            Li(
-                Grid(
-                    Div(_backtest_results_panel(), cls="col-span-5"),
-                    Div(_backtest_sidebar(), cls="col-span-2"),
-                    cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
-                ),
-                cls="uk-active",
-            ),
-            # Tab 2: Model Performance (lazy loaded)
-            Li(
-                Grid(
-                    Div(_model_performance_panel(), cls="col-span-4"),
-                    Div(_model_sidebar(), cls="col-span-3"),
-                    cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
-                ),
-            ),
-            # Tab 3: MLflow (lazy-loaded on tab switch)
-            Li(
-                Div(
-                    Loading(htmx_indicator=True, id="mlflow-spinner"),
-                    id="mlflow-results",
-                    hx_get="/mlflow_call",
-                    hx_trigger="intersect once",
-                    hx_swap="innerHTML",
-                    hx_indicator="#mlflow-spinner",
-                ),
-            ),
-            cls="uk-switcher mt-4",
-        ),
-        id="backtesting",
-    )
 
 
 def _backtest_sidebar():
@@ -1161,6 +1097,55 @@ def mlflow_experiments_card(data: dict):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Dashboard doc sections (interactive, rendered inside /docs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _dash_strategy_section():
+    """Strategy backtesting dashboard as a docs section."""
+    return _doc_section("dash-strategy", "Strategy Backtest",
+        P("Run historical backtests comparing model-guided strategies against baselines.",
+          cls=TextPresets.muted_sm),
+        DividerLine(),
+        Grid(
+            Div(_backtest_results_panel(), cls="col-span-5"),
+            Div(_backtest_sidebar(), cls="col-span-2"),
+            cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
+        ),
+    )
+
+
+def _dash_model_section():
+    """Model performance dashboard as a docs section."""
+    return _doc_section("dash-model", "Model Performance",
+        P("Evaluate prediction accuracy, per-class metrics, and confidence analysis.",
+          cls=TextPresets.muted_sm),
+        DividerLine(),
+        Grid(
+            Div(_model_performance_panel(), cls="col-span-4"),
+            Div(_model_sidebar(), cls="col-span-3"),
+            cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
+        ),
+    )
+
+
+def _dash_mlflow_section():
+    """MLflow experiment tracking as a docs section."""
+    return _doc_section("dash-mlflow", "MLflow Tracking",
+        P("Experiment runs across all model architectures and training variants.",
+          cls=TextPresets.muted_sm),
+        DividerLine(),
+        Div(
+            Loading(htmx_indicator=True, id="mlflow-spinner"),
+            id="mlflow-results",
+            hx_get="/mlflow_call",
+            hx_trigger="intersect once",
+            hx_swap="innerHTML",
+            hx_indicator="#mlflow-spinner",
+        ),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # docs footer
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1173,7 +1158,7 @@ def _docs_footer():
     """
     return Footer(
         DivCentered(
-            A("Documentation ->", href="/docs",
+            A("Documentation & Dashboards ->", href="/docs",
               style=f"color:{_IMMACULATA};"),
             cls="py-4",
         ),
@@ -1818,7 +1803,8 @@ def _docs_navbar(sections):
     )
 
 
-DOC_SECTIONS = [
+# Report sections (static project documentation)
+_REPORT_SECTIONS = [
     ("doc-overview", "Overview"),
     ("doc-data-pipeline", "Data Pipeline"),
     ("doc-exploratory-analysis", "Exploratory Analysis"),
@@ -1829,6 +1815,16 @@ DOC_SECTIONS = [
     ("doc-strategy", "Strategy"),
 ]
 
+# Dashboard sections (interactive evaluation tools)
+_DASHBOARD_SECTIONS = [
+    ("dash-strategy", "Strategy Backtest"),
+    ("dash-model", "Model Performance"),
+    ("dash-mlflow", "MLflow Tracking"),
+]
+
+# Combined for routing — sidebar renders the divider separately
+DOC_SECTIONS = _REPORT_SECTIONS + _DASHBOARD_SECTIONS
+
 _DOC_RENDERERS = {
     "doc-overview": _docs_overview,
     "doc-data-pipeline": _docs_data_pipeline,
@@ -1838,6 +1834,9 @@ _DOC_RENDERERS = {
     "doc-dl-pipeline": _docs_dl_pipeline,
     "doc-results": _docs_results,
     "doc-strategy": _docs_strategy,
+    "dash-strategy": lambda: _dash_strategy_section(),
+    "dash-model": lambda: _dash_model_section(),
+    "dash-mlflow": lambda: _dash_mlflow_section(),
 }
 
 
@@ -1862,15 +1861,13 @@ def render_doc_section(section_id: str):
 def _docs_sidebar(sections, active_id: str = "doc-overview"):
     """Sticky left sidebar with htmx-powered section links.
 
-    Clicking a link swaps the content panel without full page reload.
-    Active section is highlighted with a background color.
+    Report sections and dashboard sections are separated by a labeled divider.
 
     Args:
         sections: List of (section_id, display_name) tuples.
         active_id: Currently active section ID.
     """
-    items = []
-    for sid, name in sections:
+    def _link(sid, name):
         is_active = sid == active_id
         style = (
             f"color:white; text-decoration:none; display:block; padding:0.5rem 0.75rem; "
@@ -1879,18 +1876,32 @@ def _docs_sidebar(sections, active_id: str = "doc-overview"):
             f"color:{_FOUNDERS}; text-decoration:none; display:block; padding:0.5rem 0.75rem; "
             f"border-radius:4px; font-size:0.9rem;"
         )
-        items.append(
-            Li(A(name,
-                 hx_get=f"/docs/section?id={sid}",
-                 hx_target="#docs-content",
-                 hx_swap="innerHTML",
-                 hx_push_url=f"/docs?section={sid}",
-                 style=style,
-                 ))
-        )
+        return Li(A(name,
+                    hx_get=f"/docs/section?id={sid}",
+                    hx_target="#docs-content",
+                    hx_swap="innerHTML",
+                    hx_push_url=f"/docs?section={sid}",
+                    style=style))
+
+    report_ids = {s[0] for s in _REPORT_SECTIONS}
+    report_items = [_link(s, n) for s, n in sections if s in report_ids]
+    dash_items = [_link(s, n) for s, n in sections if s not in report_ids]
+
+    nav_items = report_items
+    if dash_items:
+        nav_items.append(Li(
+            Div(
+                Hr(style=f"border-color:{_TORERO}40; margin:0.5rem 0;"),
+                P("Dashboards", style=f"color:{_IMMACULATA}; font-size:0.7rem; "
+                  "font-weight:700; text-transform:uppercase; letter-spacing:0.05em; "
+                  "margin:0.25rem 0 0.25rem 0.75rem;"),
+            ),
+        ))
+        nav_items.extend(dash_items)
+
     return Div(
         Ul(
-            *items,
+            *nav_items,
             cls="uk-nav uk-nav-default",
             style="list-style:none; padding:0;",
         ),
