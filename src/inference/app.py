@@ -213,11 +213,11 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = "",
                 })
 
             # Compute batch analytics for Claude + human viz
+            # Full bucket distribution (moneyness + maturity, e.g. ATM_LONG)
             lgbm_buckets = [p["lgbm_bucket"] for p in all_preds]
             bucket_counts = {}
             for b in lgbm_buckets:
-                moneyness = b.split("_")[0] if "_" in b else b
-                bucket_counts[moneyness] = bucket_counts.get(moneyness, 0) + 1
+                bucket_counts[b] = bucket_counts.get(b, 0) + 1
 
             lgbm_confs = [p["lgbm_confidence"] for p in all_preds]
             lstm_confs = [p["lstm_confidence"] for p in all_preds]
