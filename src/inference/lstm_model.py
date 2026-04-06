@@ -281,3 +281,168 @@ def predict_bucket(ticker: str, date: str) -> dict:
     except Exception as e:
         logger.error(f"LSTM predict_bucket failed: {e}")
         return {"error": f"LSTM prediction failed: {e}"}
+
+
+# ── 7-class → moneyness + maturity mapping ──────────────────────────────
+
+_CLASS_TO_MONEYNESS = {
+    "ATM_30": "ATM", "ATM_60": "ATM", "ATM_90": "ATM",
+    "OTM5_30": "OTM5", "OTM5_60_90": "OTM5",
+    "OTM10_30": "OTM10", "OTM10_60_90": "OTM10",
+}
+_CLASS_TO_MATURITY = {
+    "ATM_30": "SHORT", "ATM_60": "LONG", "ATM_90": "LONG",
+    "OTM5_30": "SHORT", "OTM5_60_90": "LONG",
+    "OTM10_30": "SHORT", "OTM10_60_90": "LONG",
+}
+
+# Moneyness-level class list (for 3-class probability aggregation)
+_MONEYNESS_CLASSES = ["ATM", "OTM5", "OTM10"]
+
+
+def get_monthly_predictions() -> pd.DataFrame:
+    """Aggregate daily LSTM predictions to monthly for the scoring engine.
+
+    Takes the last trading day per (symbol, month) and extracts moneyness
+    + maturity from the 7-class prediction. Adds prob_ATM/OTM5/OTM10
+    by summing over maturity variants.
+
+    Returns:
+        Monthly DataFrame with columns compatible with the scoring engine:
+        symbol, year_month, model_moneyness, model_maturity, model_bucket,
+        model_confidence, prob_ATM, prob_OTM5, prob_OTM10.
+    """
+    global _feature_store
+    if _feature_store is None:
+        initialize()
+
+    try:
+        df = _feature_store.copy()
+
+        # Last trading day per (symbol, month)
+        df = df.sort_values(["symbol", "date"])
+        monthly = df.groupby(["symbol", "year_month"]).last().reset_index()
+
+        # Extract moneyness + maturity from 7-class prediction
+        monthly["model_moneyness"] = monthly["predicted_class"].map(_CLASS_TO_MONEYNESS)
+        monthly["model_maturity"] = monthly["predicted_class"].map(_CLASS_TO_MATURITY)
+        monthly["model_bucket"] = monthly["model_moneyness"] + "_" + monthly["model_maturity"]
+        monthly["model_confidence"] = monthly["confidence"]
+
+        # Aggregate probabilities to 3-class moneyness level
+        monthly["prob_ATM"] = (
+            monthly.get("prob_ATM_30", 0) + monthly.get("prob_ATM_60", 0) + monthly.get("prob_ATM_90", 0)
+        )
+        monthly["prob_OTM5"] = (
+            monthly.get("prob_OTM5_30", 0) + monthly.get("prob_OTM5_60_90", 0)
+        )
+        monthly["prob_OTM10"] = (
+            monthly.get("prob_OTM10_30", 0) + monthly.get("prob_OTM10_60_90", 0)
+        )
+
+        logger.info(f"LSTM monthly predictions: {len(monthly)} rows")
+        return monthly
+
+    except Exception as e:
+        logger.error(f"get_monthly_predictions failed: {e}")
+        raise
+
+
+def compute_model_metrics(year: str = "all", sample_type: str = "all") -> dict:
+    """Compute LSTM-CNN performance metrics from the feature store.
+
+    Args:
+        year: Filter by year ('all' or e.g. '2024').
+        sample_type: 'all', 'train', 'validation', 'test'.
+
+    Returns:
+        Dict with accuracy, F1, per-class breakdown, per-year, confidence.
+    """
+    global _feature_store
+    if _feature_store is None:
+        initialize()
+
+    try:
+        df = _feature_store.copy()
+
+        # Apply filters
+        if year != "all":
+            df = df[df["date"].dt.year == int(year)]
+        if sample_type == "train":
+            df = df[df["date"] < "2022-01-01"]
+        elif sample_type == "validation":
+            df = df[(df["date"] >= "2022-01-01") & (df["date"] < "2024-01-01")]
+        elif sample_type == "test":
+            df = df[df["date"] >= "2024-01-01"]
+
+        if df.empty:
+            return {"error": f"No LSTM data for year={year}, sample={sample_type}"}
+
+        n = len(df)
+        accuracy = float(df["correct"].mean())
+
+        # Per-class metrics
+        per_class = {}
+        for cls in CLASS_NAMES:
+            true_mask = df["true_label"] == cls
+            pred_mask = df["predicted_class"] == cls
+            tp = int((true_mask & pred_mask).sum())
+            fp = int((~true_mask & pred_mask).sum())
+            fn = int((true_mask & ~pred_mask).sum())
+            prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
+            per_class[cls] = {
+                "precision": round(prec, 4), "recall": round(rec, 4),
+                "f1": round(f1, 4), "support": int(true_mask.sum()),
+                "predicted": int(pred_mask.sum()),
+            }
+
+        macro_f1 = sum(v["f1"] for v in per_class.values()) / len(CLASS_NAMES)
+
+        # Per-year breakdown
+        df["year"] = df["date"].dt.year
+        per_year = []
+        for yr, grp in df.groupby("year"):
+            yr_acc = float(grp["correct"].mean())
+            yr_f1s = []
+            for cls in CLASS_NAMES:
+                t = grp["true_label"] == cls
+                p = grp["predicted_class"] == cls
+                tp = int((t & p).sum())
+                fp = int((~t & p).sum())
+                fn = int((t & ~p).sum())
+                pr = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                re = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                yr_f1s.append(2 * pr * re / (pr + re) if (pr + re) > 0 else 0.0)
+            per_year.append({
+                "year": int(yr), "accuracy": round(yr_acc, 4),
+                "macro_f1": round(sum(yr_f1s) / len(yr_f1s), 4),
+                "n_samples": len(grp),
+            })
+
+        # Confidence analysis
+        correct = df[df["correct"]]
+        incorrect = df[~df["correct"]]
+        conf = {
+            "avg_when_correct": round(float(correct["confidence"].mean()), 4) if len(correct) > 0 else 0.0,
+            "avg_when_incorrect": round(float(incorrect["confidence"].mean()), 4) if len(incorrect) > 0 else 0.0,
+            "overall_avg": round(float(df["confidence"].mean()), 4),
+        }
+
+        return {
+            "n_samples": n,
+            "year_filter": year,
+            "sample_filter": sample_type,
+            "accuracy": round(accuracy, 4),
+            "macro_f1": round(macro_f1, 4),
+            "per_class": per_class,
+            "per_year": per_year,
+            "confidence": conf,
+            "model_name": "LSTM-CNN 7-Class",
+            "n_classes": 7,
+        }
+
+    except Exception as e:
+        logger.error(f"LSTM compute_model_metrics failed: {e}")
+        return {"error": f"LSTM metrics failed: {e}"}

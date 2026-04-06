@@ -377,9 +377,10 @@ async def run_backtest(preset: str = "balanced", budget: float = 100_000,
 
 async def run_backtest_all(budget: float = 100_000, year: str = "all",
                            force: bool = False) -> dict:
-    """Run backtests for all 3 presets and return combined results.
+    """Run backtests for both models and return combined results.
 
-    Cache-first per preset. Optionally filter to a specific year.
+    LGBM strategies: Baseline, Argmax, Risk-Adjusted, Conservative.
+    LSTM strategies: Argmax, Risk-Adjusted, Conservative (same scoring engine).
 
     Args:
         budget: Dollar budget per month.
@@ -387,11 +388,10 @@ async def run_backtest_all(budget: float = 100_000, year: str = "all",
         force: If True, ignore cache and recompute.
 
     Returns:
-        Dict with results for all presets + baseline + year range info.
+        Dict with results for both models + baseline + year range info.
     """
     try:
-        # Build cache key incorporating year
-        cache_key = f"all_{year}"
+        cache_key = f"dual_{year}"
 
         if not force:
             cached = _load_cached_report(cache_key)
@@ -400,44 +400,64 @@ async def run_backtest_all(budget: float = 100_000, year: str = "all",
                 logger.info(f"Returning cached backtest_all for year={year}")
                 return cached
 
+        # ── LGBM feature store ──
         logger.info(f"Running backtest_all: year={year}, budget=${budget:,.0f}")
         fs = pd.read_parquet(DATA_DIR / "feature_store.parquet")
         fs["decision_date"] = pd.to_datetime(fs["decision_date"])
         fs["year_month"] = fs["decision_date"].dt.to_period("M")
 
-        # Filter to year if specified
         if year != "all":
             fs = fs[fs["decision_date"].dt.year == int(year)]
             if fs.empty:
-                return {"error": f"No data for year {year}"}
+                return {"error": f"No LGBM data for year {year}"}
 
-        presets = ["conservative", "balanced", "aggressive"]
-        results = {}
+        # LGBM: Conservative only (Balanced/Aggressive commented out)
+        lgbm_report = _run_backtest_loop(fs, budget, "conservative")
+        lgbm_results = {
+            "conservative": {"metrics": lgbm_report["strategy"]["metrics"]},
+            # "balanced": ...,     # removed — keeping only conservative
+            # "aggressive": ...,   # removed — keeping only conservative
+        }
 
-        for preset in presets:
-            report = _run_backtest_loop(fs, budget, preset)
-            results[preset] = {
-                "metrics": report["strategy"]["metrics"],
-                "monthly_detail": report["monthly_detail"],
-            }
-            # Baseline, argmax, risk_adjusted are same for all presets — take from first
-            if "baseline" not in results:
-                results["baseline"] = report["baseline"]
-                results["argmax"] = report["argmax"]
-                results["risk_adjusted"] = report["risk_adjusted"]
+        # ── LSTM feature store ──
+        from src.inference.lstm_model import get_monthly_predictions
+        lstm_monthly = get_monthly_predictions()
+        lstm_monthly = lstm_monthly[lstm_monthly["year_month"].notna()].copy()
+
+        if year != "all":
+            lstm_monthly = lstm_monthly[
+                lstm_monthly["date"].dt.year == int(year)
+            ]
+
+        # LSTM backtest: same loop, same scoring engine, different predictions
+        lstm_report = None
+        if not lstm_monthly.empty:
+            lstm_report = _run_backtest_loop(lstm_monthly, budget, "conservative")
+
+        # ── Combine ──
+        date_range_start = str(fs["year_month"].min())
+        date_range_end = str(fs["year_month"].max())
 
         combined = {
             "year": year,
             "budget": budget,
             "n_months": len(fs["year_month"].unique()),
-            "date_range": {
-                "start": str(fs["year_month"].min()),
-                "end": str(fs["year_month"].max()),
+            "date_range": {"start": date_range_start, "end": date_range_end},
+            # LGBM strategies
+            "lgbm": {
+                "baseline": lgbm_report["baseline"],
+                "argmax": lgbm_report["argmax"],
+                "risk_adjusted": lgbm_report["risk_adjusted"],
+                "conservative": lgbm_results["conservative"],
             },
-            "presets": results,
-            "baseline": results["baseline"],
-            "argmax": results["argmax"],
-            "risk_adjusted": results["risk_adjusted"],
+            # LSTM strategies
+            "lstm": {
+                "argmax": lstm_report["argmax"] if lstm_report else {"metrics": {}},
+                "risk_adjusted": lstm_report["risk_adjusted"] if lstm_report else {"metrics": {}},
+                "conservative": {"metrics": lstm_report["strategy"]["metrics"]} if lstm_report else {"metrics": {}},
+            },
+            # Top-level baseline (shared — model-independent)
+            "baseline": lgbm_report["baseline"],
         }
 
         _save_cached_report(combined, cache_key)

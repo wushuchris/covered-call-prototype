@@ -92,17 +92,20 @@ async def chart_data_endpoint(ticker: str = "", date: str = ""):
 
 @app.get("/model_metrics")
 async def model_metrics_endpoint(year: str = "all", sample_type: str = "all"):
-    """Compute model performance metrics from the feature store.
+    """Compute model performance metrics for both LGBM and LSTM-CNN.
 
     Args:
         year: Year filter ('all' or e.g. '2020').
-        sample_type: 'all', 'in-sample', or 'out-of-sample'.
+        sample_type: 'all', 'train', 'test', or 'validation'.
 
     Returns:
-        Dict with accuracy, F1, per-class breakdown, per-year breakdown.
+        Dict with lgbm and lstm sub-dicts containing metrics.
     """
     try:
-        return compute_model_metrics(year=year, sample_type=sample_type)
+        from src.inference.lstm_model import compute_model_metrics as lstm_metrics
+        lgbm = compute_model_metrics(year=year, sample_type=sample_type)
+        lstm = lstm_metrics(year=year, sample_type=sample_type)
+        return {"lgbm": lgbm, "lstm": lstm}
     except Exception as e:
         logger.error(f"Error on /model_metrics: {e}")
         return {"error": str(e)}

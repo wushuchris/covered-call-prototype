@@ -653,56 +653,68 @@ def _backtest_results_panel():
 
 
 def backtest_results_card(data: dict):
-    """Render backtest results: metrics table with Baseline + 3 presets as columns.
+    """Render dual-model backtest results: LGBM and LSTM strategies.
 
     Args:
         data: Combined backtest report from run_backtest_all().
 
     Returns:
-        Div with comparison table.
+        Div with two strategy comparison tables.
     """
     try:
         n_months = data.get("n_months", 0)
         year = data.get("year", "all")
         date_range = data.get("date_range", {})
-        bm = data["baseline"]["metrics"]
-        am = data.get("argmax", {}).get("metrics", {})
-        ra = data.get("risk_adjusted", {}).get("metrics", {})
-        presets = data["presets"]
+        lgbm = data.get("lgbm", {})
+        lstm = data.get("lstm", {})
+        baseline_m = data.get("baseline", {}).get("metrics", {})
 
-        def fmt_pct(v):
-            return f"{v:.1%}"
+        def fmt_pct(v): return f"{v:.1%}"
+        def fmt_ratio(v): return f"{v:.2f}"
 
-        def fmt_ratio(v):
-            return f"{v:.2f}"
-
-        # Build comparison table rows with tooltips
-        metrics = [
-            ("Annualized Return", "annualized_return", fmt_pct, True,
-             "Total return converted to a yearly rate. What you'd earn per year on average."),
-            ("Sharpe Ratio", "sharpe_ratio", fmt_ratio, True,
-             "Return per unit of risk. Higher is better. Above 1 is good, above 2 is very good."),
-            ("Max Drawdown", "max_drawdown", fmt_pct, False,
-             "Biggest peak-to-trough drop. The worst-case loss you'd experience before recovery."),
-            ("Hit Rate", "hit_rate", fmt_pct, True,
-             "Percentage of months that ended with a positive return."),
-            ("Avg P / Avg L", "avg_p_l", fmt_ratio, True,
-             "Average winning month divided by average losing month. Above 1 means wins are bigger than losses."),
+        metric_defs = [
+            ("Ann. Return", "annualized_return", fmt_pct,
+             "Total return converted to a yearly rate."),
+            ("Sharpe", "sharpe_ratio", fmt_ratio,
+             "Return per unit of risk. Above 1 is good, above 2 is very good."),
+            ("Max Drawdown", "max_drawdown", fmt_pct,
+             "Biggest peak-to-trough drop before recovery."),
+            ("Hit Rate", "hit_rate", fmt_pct,
+             "Percentage of months with a positive return."),
+            ("Avg P / Avg L", "avg_p_l", fmt_ratio,
+             "Average win divided by average loss."),
         ]
 
-        # Columns: Baseline | Argmax | Risk-Adjusted | Conservative | Balanced | Aggressive
-        bt_table_rows = []
-        for label, key, fmt, higher_is_better, tip_text in metrics:
-            cells = [
-                Td(Span(label, _tip(tip_text))),
-                Td(fmt(bm.get(key, 0))),
-                Td(fmt(am.get(key, 0))),
-                Td(fmt(ra.get(key, 0))),
-            ]
-            for preset in ["conservative", "balanced", "aggressive"]:
-                val = presets[preset]["metrics"][key]
-                cells.append(Td(fmt(val)))
-            bt_table_rows.append(Tr(*cells))
+        def _strat_table(model_data: dict, model_label: str):
+            """Build a strategy table for one model."""
+            am = model_data.get("argmax", {}).get("metrics", {})
+            ra = model_data.get("risk_adjusted", {}).get("metrics", {})
+            cm = model_data.get("conservative", {}).get("metrics", {})
+
+            rows = []
+            for label, key, fmt, tip in metric_defs:
+                rows.append(Tr(
+                    Td(Span(label, _tip(tip))),
+                    Td(fmt(baseline_m.get(key, 0))),
+                    Td(fmt(am.get(key, 0))),
+                    Td(fmt(ra.get(key, 0))),
+                    Td(fmt(cm.get(key, 0))),
+                ))
+
+            return Div(
+                H4(model_label, style=f"color:{_IMMACULATA}; font-size:1rem; margin-bottom:0.5rem;"),
+                Table(
+                    Thead(Tr(
+                        Th("Metric"),
+                        Th(Span("Baseline", _tip("OTM10 short-dated on all tickers. No model."))),
+                        Th(Span("Argmax", _tip("Model's top pick per ticker, equal weight."))),
+                        Th(Span("Risk-Adj", _tip("P(bucket) x E[return], expanding averages."))),
+                        Th(Span("Conservative", _tip("Scored: 7 positions, low-cost priority."))),
+                    )),
+                    Tbody(*rows),
+                    cls="uk-table uk-table-small uk-table-divider",
+                ),
+            )
 
         period_label = f"Year: {year}" if year != "all" else "All Years"
         period_detail = f"{date_range.get('start', '?')} to {date_range.get('end', '?')}"
@@ -712,19 +724,12 @@ def backtest_results_card(data: dict):
                 P(f"{period_label} ({period_detail}) | {n_months} months",
                   cls=TextPresets.muted_sm),
                 DividerLine(),
-                Table(
-                    Thead(Tr(
-                        Th("Metric"),
-                        Th(Span("Baseline", _tip("Always sell 10% OTM short-dated calls on all tickers, equal weight. No model."))),
-                        Th(Span("Argmax", _tip("Model's single best prediction per ticker, all tickers traded, equal weight."))),
-                        Th(Span("Risk-Adjusted", _tip("Picks the bucket that maximizes probability times expected return. Uses expanding historical averages."))),
-                        Th(Span("Conservative", _tip("Wide diversification (7 positions), prioritizes low-cost trades."))),
-                        Th(Span("Balanced", _tip("Equal weight to confidence, cost, and vol premium (5 positions)."))),
-                        Th(Span("Aggressive", _tip("Concentrated bets (3 positions), chases highest model confidence."))),
-                    )),
-                    Tbody(*bt_table_rows),
-                    cls="uk-table uk-table-small uk-table-divider",
-                ),
+                _strat_table(lgbm, "LGBM 3-Class Strategies"),
+                DividerLine(),
+                _strat_table({"argmax": lstm.get("argmax", {}),
+                              "risk_adjusted": lstm.get("risk_adjusted", {}),
+                              "conservative": lstm.get("conservative", {})},
+                             "LSTM-CNN 7-Class Strategies"),
                 header=H4("Strategy Comparison", style=f"color:{_FOUNDERS};"),
             ),
         )
@@ -801,137 +806,118 @@ def _model_performance_panel():
     )
 
 
-def model_performance_card(data: dict):
-    """Render model performance metrics: summary, per-class, per-year, comparison.
+def _model_summary_block(d: dict, classes: list):
+    """Render a single model's metrics: summary + per-class + confidence.
 
     Args:
-        data: Dict from compute_model_metrics() with metrics and breakdowns.
+        d: Metrics dict from compute_model_metrics (LGBM or LSTM).
+        classes: List of class names for the per-class table.
 
     Returns:
-        Div with metrics cards and tables.
+        Div with model metrics.
+    """
+    if "error" in d:
+        return P(f"Error: {d['error']}", cls="uk-text-danger")
+
+    conf = d.get("confidence", {})
+
+    # Summary row
+    summary = Div(
+        *[Div(
+            P(Strong(label), cls=TextPresets.muted_sm, style="margin-bottom:0.25rem;"),
+            P(val, style="font-size:1.3rem; font-weight:600; margin:0;"),
+            style="text-align:center; padding:0.5rem;",
+        ) for label, val in [
+            ("Accuracy", f"{d.get('accuracy', 0):.1%}"),
+            ("Macro F1", f"{d.get('macro_f1', 0):.3f}"),
+            ("Samples", f"{d.get('n_samples', 0):,}"),
+        ]],
+        style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.5rem;",
+    )
+
+    # Per-class table
+    pc_header = Tr(Th("Class"), Th("Prec"), Th("Recall"), Th("F1"), Th("Support"))
+    pc_rows = []
+    for cls in classes:
+        m = d.get("per_class", {}).get(cls, {})
+        pc_rows.append(Tr(
+            Td(Strong(cls)), Td(f"{m.get('precision', 0):.3f}"),
+            Td(f"{m.get('recall', 0):.3f}"), Td(f"{m.get('f1', 0):.3f}"),
+            Td(str(m.get("support", 0))),
+        ))
+
+    # Confidence
+    conf_line = P(
+        f"Confidence — correct: {conf.get('avg_when_correct', 0):.1%}, "
+        f"incorrect: {conf.get('avg_when_incorrect', 0):.1%}, "
+        f"overall: {conf.get('overall_avg', 0):.1%}",
+        cls=TextPresets.muted_sm, style="margin-top:0.5rem;",
+    )
+
+    return Div(
+        summary, DividerLine(),
+        Table(Thead(pc_header), Tbody(*pc_rows),
+              cls="uk-table uk-table-small uk-table-divider"),
+        conf_line,
+    )
+
+
+def model_performance_card(data: dict):
+    """Render dual-model performance metrics side by side.
+
+    Args:
+        data: Dict with 'lgbm' and 'lstm' sub-dicts from /model_metrics.
+
+    Returns:
+        Div with both models' metrics and per-year breakdown.
     """
     try:
-        n = data.get("n_samples", 0)
-        year_filter = data.get("year_filter", "all")
-        sample_filter = data.get("sample_filter", "all")
+        lgbm = data.get("lgbm", {})
+        lstm = data.get("lstm", {})
 
-        # ── Summary metrics row ──
-        summary_items = [
-            ("Accuracy", f"{data.get('accuracy', 0):.1%}",
-             "How often the model picks the correct bucket overall."),
-            ("Macro F1", f"{data.get('macro_f1', 0):.3f}",
-             "Average F1 across all classes, weighted equally. Balances precision and recall. Random guessing = 0.33."),
-            ("Top-2 Accuracy", f"{data.get('top2_accuracy', 0):.1%}",
-             "How often the correct answer is the model's 1st or 2nd choice."),
-            ("Samples", f"{n:,}", None),
-        ]
-        summary_cards = Div(
-            *[
-                Div(
-                    P(Strong(label), _tip(tip) if tip else "",
-                      cls=TextPresets.muted_sm, style="margin-bottom:0.25rem;"),
-                    P(value, style="font-size:1.5rem; font-weight:600; margin:0;"),
-                    style="text-align:center; padding:0.75rem;",
-                )
-                for label, value, tip in summary_items
-            ],
-            style="display:grid; grid-template-columns:repeat(4, 1fr); gap:0.75rem;",
+        year_filter = lgbm.get("year_filter", "all")
+        sample_filter = lgbm.get("sample_filter", "all")
+        filter_label = f"Year: {year_filter}" if year_filter != "all" else "All Years"
+        sample_labels = {"all": "All Data", "train": "Train", "test": "Test", "validation": "Validation"}
+        sample_label = sample_labels.get(sample_filter, sample_filter)
+
+        # Two-column layout: LSTM (primary) | LGBM
+        model_columns = Div(
+            Div(
+                H4("LSTM-CNN 7-Class", style=f"color:{_IMMACULATA}; font-size:1rem;"),
+                _model_summary_block(lstm, [
+                    "ATM_30", "ATM_60", "ATM_90", "OTM10_30",
+                    "OTM10_60_90", "OTM5_30", "OTM5_60_90",
+                ]),
+                style=f"flex:1; padding-right:1rem; border-right:1px solid {_TORERO}40;",
+            ),
+            Div(
+                H4("LGBM 3-Class", style=f"color:{_IMMACULATA}; font-size:1rem;"),
+                _model_summary_block(lgbm, ["ATM", "OTM5", "OTM10"]),
+                style="flex:1; padding-left:1rem;",
+            ),
+            style="display:flex; gap:0; margin-top:0.5rem;",
         )
 
-        # ── Per-class breakdown table ──
-        per_class = data.get("per_class", {})
-        pc_header = Tr(
-            Th("Class"),
-            Th(Span("Precision", _tip("Of all times the model predicted this class, how often was it right."))),
-            Th(Span("Recall", _tip("Of all actual instances of this class, how many did the model catch."))),
-            Th(Span("F1", _tip("Balance between precision and recall. 1.0 is perfect, 0.33 is random."))),
-            Th(Span("Support", _tip("How many times this class actually appeared in the data."))),
-            Th(Span("Predicted", _tip("How many times the model chose this class."))),
-        )
-        pc_rows = []
-        for cls in ["ATM", "OTM5", "OTM10"]:
-            m = per_class.get(cls, {})
-            pc_rows.append(Tr(
-                Td(Strong(cls)),
-                Td(f"{m.get('precision', 0):.3f}"),
-                Td(f"{m.get('recall', 0):.3f}"),
-                Td(f"{m.get('f1', 0):.3f}"),
-                Td(str(m.get("support", 0))),
-                Td(str(m.get("predicted", 0))),
-            ))
-
-        # ── Per-year breakdown table ──
-        per_year = data.get("per_year", [])
-        year_header = ["Year", "Accuracy", "Macro F1", "Top-2", "Samples"]
+        # Per-year breakdown (LGBM — has longer history)
+        per_year = lgbm.get("per_year", [])
+        year_header = ["Year", "Accuracy", "Macro F1", "Samples"]
         year_rows = [
-            {
-                "Year": str(y.get("year", "?")),
-                "Accuracy": f"{y.get('accuracy', 0):.1%}",
-                "Macro F1": f"{y.get('macro_f1', 0):.3f}",
-                "Top-2": f"{y.get('top2', 0):.1%}",
-                "Samples": str(y.get("n_samples", 0)),
-            }
+            {"Year": str(y["year"]), "Accuracy": f"{y['accuracy']:.1%}",
+             "Macro F1": f"{y['macro_f1']:.3f}", "Samples": str(y["n_samples"])}
             for y in per_year
         ]
 
-        # ── Confidence analysis ──
-        conf = data.get("confidence", {})
-        conf_items = [
-            ("Avg Confidence (Correct)", f"{conf.get('avg_when_correct', 0):.1%}",
-             "How confident the model is when it gets the answer right. Higher means the model knows when it's right."),
-            ("Avg Confidence (Incorrect)", f"{conf.get('avg_when_incorrect', 0):.1%}",
-             "How confident the model is when it gets it wrong. If close to 'correct', the model can't tell when it's guessing."),
-            ("Overall Avg Confidence", f"{conf.get('overall_avg', 0):.1%}",
-             "Average confidence across all predictions regardless of correctness."),
-        ]
-
-        # ── Model information (single column — LGBM production model) ──
-        info_header = ["Metric", "Value"]
-        info_rows = [
-            {"Metric": "Task", "Value": "3-class moneyness (ATM / OTM5 / OTM10)"},
-            {"Metric": "Macro F1", "Value": f"{data.get('macro_f1', 0):.3f}"},
-            {"Metric": "Accuracy", "Value": f"{data.get('accuracy', 0):.1%}"},
-            {"Metric": "Validation", "Value": "Walk-forward annual"},
-            {"Metric": "Inference", "Value": "Row lookup (<1ms)"},
-            {"Metric": "Status", "Value": "Production"},
-        ]
-
-        filter_label = f"Year: {year_filter}" if year_filter != "all" else "All Years"
-        sample_labels = {"all": "All Data", "train": "Train Dataset", "test": "Test Dataset"}
-        sample_label = sample_labels.get(sample_filter, sample_filter)
-
         return Div(
             Card(
-                P(f"{filter_label} | {sample_label} | {data.get('model_name', '?')}",
-                  cls=TextPresets.muted_sm),
+                P(f"{filter_label} | {sample_label}", cls=TextPresets.muted_sm),
                 DividerLine(),
-                # Summary metrics
-                summary_cards,
-                DividerLine(),
-                # Per-class breakdown
-                H4("Per-Class Breakdown", style=f"color:{_IMMACULATA}; font-size:1rem;"),
-                Table(Thead(pc_header), Tbody(*pc_rows),
-                      cls="uk-table uk-table-small uk-table-divider"),
-                DividerLine(),
-                # Confidence analysis
-                H4("Confidence Analysis", style=f"color:{_IMMACULATA}; font-size:1rem;"),
-                Div(
-                    *[Div(
-                        P(Strong(label), _tip(tip), cls=TextPresets.muted_sm),
-                        P(value),
-                    ) for label, value, tip in conf_items],
-                    style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.75rem; text-align:center;",
-                ),
-                DividerLine(),
-                # Model information
-                H4("Model Information", style=f"color:{_IMMACULATA}; font-size:1rem;"),
-                TableFromDicts(header_data=info_header, body_data=info_rows),
+                model_columns,
                 header=H4("Model Performance", style=f"color:{_FOUNDERS};"),
             ),
-            # Per-year breakdown in a collapsible section
             Card(
                 TableFromDicts(header_data=year_header, body_data=year_rows),
-                header=H4("Performance by Year", style=f"color:{_FOUNDERS};"),
+                header=H4("LGBM Performance by Year", style=f"color:{_FOUNDERS};"),
                 cls="mt-2",
             ) if year_filter == "all" and year_rows else "",
         )
@@ -1661,18 +1647,11 @@ def _docs_strategy():
               "(Argmax and Risk-Adjusted) and one no-model baseline complete the comparison."),
             _doc_columns(
                 Div(
-                    P(Strong("Conservative"), cls="mt-1"),
+                    P(Strong("Conservative (Scored)"), cls="mt-1"),
                     P("Confidence 30% / TC 50% / Delta-Hedge 20%", cls=TextPresets.muted_sm),
                     P("7 positions, equal weight", cls=TextPresets.muted_sm),
-                    P("Spread capital wide, prioritize low-cost trades.", cls="mt-1"),
-                    P(Strong("Balanced"), cls="mt-3"),
-                    P("Confidence 33% / TC 33% / Delta-Hedge 34%", cls=TextPresets.muted_sm),
-                    P("5 positions, equal weight", cls=TextPresets.muted_sm),
-                    P("Equal consideration to all signals.", cls="mt-1"),
-                    P(Strong("Aggressive"), cls="mt-3"),
-                    P("Confidence 60% / TC 10% / Delta-Hedge 30%", cls=TextPresets.muted_sm),
-                    P("3 positions, proportional to composite score", cls=TextPresets.muted_sm),
-                    P("Chase the model's strongest convictions.", cls="mt-1"),
+                    P("Spread capital wide, prioritize low-cost trades. Run with both LGBM and LSTM predictions.", cls="mt-1"),
+                    # Balanced and Aggressive removed — Conservative is the production preset
                 ),
                 Div(
                     P(Strong("Argmax (No Scoring)"), cls="mt-1"),
@@ -1680,7 +1659,7 @@ def _docs_strategy():
                     P("Pure model signal with no filtering.", cls="mt-1"),
                     P(Strong("Risk-Adjusted (No Scoring)"), cls="mt-3"),
                     P("P(bucket) x E[return | bucket] using expanding historical averages.", cls=TextPresets.muted_sm),
-                    P("Probability-weighted expected return. Best Sharpe in backtests.", cls="mt-1"),
+                    P("Probability-weighted expected return.", cls="mt-1"),
                     P(Strong("Baseline (No Model)"), cls="mt-3"),
                     P("Always sell 10% OTM short-dated on all tickers, equal weight.", cls=TextPresets.muted_sm),
                     P("No model, no scoring — pure benchmark.", cls="mt-1"),
