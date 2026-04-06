@@ -289,36 +289,30 @@ def _inference_results_panel():
 
 
 def inference_results_card(data: dict):
-    """Render inference results as a stats table + candlestick chart.
-
-    The chart data comes as OHLC dicts from the inference service and
-    is rendered via MonsterUI's ApexChart component (candlestick type).
+    """Render dual-model inference results: LGBM + LSTM-CNN table + chart.
 
     Args:
-        data: Dict with model prediction fields and chart_data.
+        data: Combined dict from graph aggregate node with lgbm/lstm sub-dicts.
 
     Returns:
         Card Div with results table and candlestick chart.
     """
     try:
-        # Daily inference display — only model output, no ground truth
+        lgbm = data.get("lgbm", {})
+        lstm = data.get("lstm", {})
+
         # Tuples: (label, value, tooltip_or_None)
         display_rows = [
             ("Ticker", data.get("ticker", "—"), None),
             ("Date", data.get("date", "—"), None),
             ("Month", data.get("month", "—"), None),
-            ("Model", "LGBM 3-Class Moneyness", None),
-            ("Prediction", data.get("model_bucket", "—"),
-             "Recommended strike bucket: ATM (at the money), OTM5 (5% out of the money), OTM10 (10% out). SHORT = sell within 45 days, LONG = sell 46-120 days."),
-            ("Confidence", f"{data.get('model_confidence', 0):.1%}",
-             "How sure the model is about its top pick. Higher means the model sees a clearer signal."),
             ("Baseline", data.get("baseline", "—"),
              "What you'd pick if you ignored the model entirely: always sell 10% OTM short-dated calls."),
             ("Sample", data.get("sample_type", "—"),
              "Train Dataset = the model learned from this data. Test Dataset = the model has never seen this data."),
         ]
 
-        # Build table rows with inline tooltips
+        # Build shared info rows
         table_rows = []
         for label, value, tip_text in display_rows:
             metric_cell = Span(label)
@@ -326,7 +320,38 @@ def inference_results_card(data: dict):
                 metric_cell = Span(label, _tip(tip_text))
             table_rows.append(Tr(Td(metric_cell), Td(value)))
 
-        # OHLC data from inference service → ApexCharts candlestick
+        # Separator + LGBM prediction
+        table_rows.append(Tr(
+            Td(Strong("LGBM 3-Class", style=f"color:{_IMMACULATA};")),
+            Td(""),
+        ))
+        table_rows.append(Tr(
+            Td(Span("Prediction", _tip(
+                "Recommended moneyness + maturity. SHORT = sell within 45 days, LONG = 46-120 days."))),
+            Td(data.get("model_bucket", "—")),
+        ))
+        table_rows.append(Tr(
+            Td(Span("Confidence", _tip("LGBM model probability for its top pick."))),
+            Td(f"{data.get('model_confidence', 0):.1%}"),
+        ))
+
+        # Separator + LSTM prediction
+        table_rows.append(Tr(
+            Td(Strong("LSTM-CNN 7-Class", style=f"color:{_IMMACULATA};")),
+            Td(""),
+        ))
+        table_rows.append(Tr(
+            Td(Span("Prediction", _tip(
+                "Joint moneyness + maturity bucket from the deep learning model. "
+                "7 classes: ATM/OTM5/OTM10 crossed with 30d/60-90d expiry."))),
+            Td(data.get("lstm_prediction", "—")),
+        ))
+        table_rows.append(Tr(
+            Td(Span("Confidence", _tip("LSTM-CNN softmax probability for its top pick."))),
+            Td(f"{data.get('lstm_confidence', 0):.1%}"),
+        ))
+
+        # OHLC chart
         chart_data = data.get("chart_data", [])
         if chart_data:
             chart_el = ApexChart(opts={
@@ -341,13 +366,10 @@ def inference_results_card(data: dict):
         else:
             chart_el = P("No chart data available.", cls=TextPresets.muted_sm)
 
-        # Warn if month was snapped to nearest available
-        # Using a static alert Div instead of Toast — Toast needs UIKit JS init
-        # which doesn't fire on htmx swap
         snap_warning = None
         if data.get("snapped"):
             snap_warning = Div(
-                P(f"No data for requested month — showing nearest available: {data.get('month', '?')}",
+                P(f"No data for requested date — showing nearest available: {data.get('month', '?')}",
                   style="margin:0;"),
                 cls="uk-alert uk-alert-warning",
                 style="padding:0.75rem 1rem; margin-bottom:0.5rem; border-radius:6px; "
@@ -358,7 +380,6 @@ def inference_results_card(data: dict):
             snap_warning if snap_warning else "",
             Card(
                 Div(
-                    # table side — left ~40%
                     Div(
                         Table(
                             Thead(Tr(Th("Metric"), Th("Value"))),
@@ -367,11 +388,7 @@ def inference_results_card(data: dict):
                         ),
                         style="flex:2;",
                     ),
-                    # chart side — right ~60%, rendered via ApexChart component
-                    Div(
-                        chart_el,
-                        style="flex:3; min-height:200px;",
-                    ),
+                    Div(chart_el, style="flex:3; min-height:200px;"),
                     style="display:flex; gap:1rem;",
                 ),
                 header=H4(f"Inference — {data.get('ticker', '?')} @ {data.get('date', '?')}",
@@ -436,12 +453,11 @@ def batch_results_card(data: dict):
         # ── Summary stats card ──
         stats_display = {
             "Date": summary.get("date", "—"),
-            "Model": summary.get("model", "—"),
+            "Models": summary.get("model", "—"),
             "Tickers": str(summary.get("n_tickers", 0)),
-            "Top Pick": f"{summary.get('top_ticker', '?')} ({summary.get('top_prediction', '?')})",
+            "Top Pick (LGBM)": f"{summary.get('top_ticker', '?')} ({summary.get('top_prediction', '?')})",
             "Top Confidence": f"{summary.get('top_confidence', 0):.1%}",
             "Avg Confidence": f"{summary.get('avg_confidence', 0):.1%}",
-            "Accuracy": f"{summary.get('accuracy', 0):.1%}",
             "Sample": summary.get("sample_type", "—"),
         }
         stats_header = ["Metric", "Value"]
@@ -461,7 +477,7 @@ def batch_results_card(data: dict):
                 "Sample": r.get("sample_type", "—"),
             })
 
-        detail_header = ["Ticker", "Prediction", "Confidence", "Correct", "Sample", "Chart"]
+        detail_header = ["Ticker", "LGBM", "LGBM Conf", "LSTM-CNN", "LSTM Conf", "Sample", "Chart"]
 
         # Build table rows manually to embed the chart icon in each row
         batch_date = summary.get("date", "")
@@ -475,7 +491,8 @@ def batch_results_card(data: dict):
                     Td(Strong(ticker)),
                     Td(r.get("model_bucket", "—")),
                     Td(f"{r.get('model_confidence', 0):.1%}"),
-                    Td("Y" if r.get("model_correct") else "N"),
+                    Td(r.get("lstm_prediction", "—")),
+                    Td(f"{r.get('lstm_confidence', 0):.1%}"),
                     Td(r.get("sample_type", "—")),
                     Td(_batch_ticker_chart_modal(ticker, batch_date)),
                 )
