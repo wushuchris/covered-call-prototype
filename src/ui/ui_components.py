@@ -400,7 +400,7 @@ def claude_analysis_card(data: dict):
         ) if source != "api" else ""
 
         analysis_card = Card(
-            P(analysis_text, style="line-height:1.6; white-space:pre-wrap;"),
+            render_md(analysis_text),
             header=Div(
                 UkIcon("brain", height=20, width=20),
                 H4(" Claude Analysis", style=f"color:{_FOUNDERS}; display:inline;"),
@@ -409,11 +409,11 @@ def claude_analysis_card(data: dict):
             ),
         )
 
-        # Layout: scoring + context side by side, analysis full width below
+        # Layout: context (left) + scoring (right), analysis full width below
         return Div(
             Div(
-                Div(scoring_card, style="flex:1;"),
                 Div(context_card, style="flex:1;"),
+                Div(scoring_card, style="flex:1;"),
                 style="display:flex; gap:1rem;",
             ),
             analysis_card,
@@ -849,20 +849,22 @@ def backtest_results_card(data: dict, mode: str = "absolute"):
             )
 
         period_label = f"Year: {year}" if year != "all" else "All Years"
-        period_detail = f"{date_range.get('start', '?')} to {date_range.get('end', '?')}"
-        mode_label = "Showing difference vs baseline" if is_delta else "Showing absolute metrics"
+        mode_label = "vs Baseline" if is_delta else "Absolute"
+
+        lgbm_period = f"{lgbm_r.get('start', '?')}–{lgbm_r.get('end', '?')} ({lgbm_r.get('n_months', '?')} mo)"
+        lstm_period = f"{lstm_r.get('start', '?')}–{lstm_r.get('end', '?')} ({lstm_r.get('n_months', '?')} mo)"
 
         return Div(
             Card(
-                P(f"{period_label} ({period_detail}) | {n_months} months — {mode_label}",
+                P(f"{period_label} | {mode_label}",
                   cls=TextPresets.muted_sm),
-                DividerLine(),
-                _strat_table(lgbm, "LGBM 3-Class Strategies"),
                 DividerLine(),
                 _strat_table({"argmax": lstm.get("argmax", {}),
                               "risk_adjusted": lstm.get("risk_adjusted", {}),
                               "conservative": lstm.get("conservative", {})},
-                             "LSTM-CNN 7-Class Strategies"),
+                             f"LSTM-CNN 7-Class — {lstm_period}"),
+                DividerLine(),
+                _strat_table(lgbm, f"LGBM 3-Class — {lgbm_period}"),
                 header=H4("Strategy Comparison", style=f"color:{_FOUNDERS};"),
             ),
         )
