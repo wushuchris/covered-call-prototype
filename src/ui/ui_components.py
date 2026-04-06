@@ -337,15 +337,15 @@ def claude_analysis_card(data: dict):
                            ("risk_adjusted", "Risk-Adjusted")]:
             s = scoring.get(key, {})
             ret = s.get("return", 0)
-            scoring_rows.append(Tr(Td(label), Td(f"{ret:.4%}"), Td(str(s.get("n_tickers", "—")))))
+            scoring_rows.append(Tr(Td(label), Td(f"{ret:.4%}")))
         for preset in ["conservative"]:  # balanced, aggressive removed per team decision
             s = scoring.get("presets", {}).get(preset, {})
             ret = s.get("return", 0)
-            scoring_rows.append(Tr(Td(preset.title()), Td(f"{ret:.4%}"), Td(str(s.get("n_positions", "—")))))
+            scoring_rows.append(Tr(Td(preset.title()), Td(f"{ret:.4%}")))
 
         scoring_card = Card(
             Table(
-                Thead(Tr(Th("Strategy"), Th("Return"), Th("Positions"))),
+                Thead(Tr(Th("Strategy"), Th("Return"))),
                 Tbody(*scoring_rows),
                 cls="uk-table uk-table-small uk-table-divider",
             ),
@@ -358,27 +358,45 @@ def claude_analysis_card(data: dict):
 
         # ── Context summary ──
         ctx = data.get("context", {})
+        is_batch_ctx = ctx.get("batch", False)
         price = ctx.get("price", {})
         track = ctx.get("track_record", {})
         features = ctx.get("features", {})
         iv = features.get("iv", {})
 
         context_items = []
-        if price and "error" not in price:
+        if is_batch_ctx:
+            # Portfolio-level summary
             context_items.extend([
-                Tr(Td("Trend"), Td(f"{price.get('trend', '?').title()}")),
-                Tr(Td("Vol Regime"), Td(f"{price.get('vol_regime', '?').replace('_', ' ').title()}")),
-                Tr(Td("20d Vol"), Td(f"{price.get('vol_20d', 0):.1%}")),
-                Tr(Td("60d Return"), Td(f"{price.get('period_return', 0):.1%}")),
+                Tr(Td("Trend"), Td(str(price.get("trend", "—")))),
+                Tr(Td("High Vol"), Td(str(price.get("vol_regime", "—")))),
+                Tr(Td("Avg 20d Vol"), Td(f"{price.get('vol_20d', 0):.1%}")),
+                Tr(Td("Avg 60d Return"), Td(f"{price.get('period_return', 0):.1%}")),
+                Tr(Td("Worst Drawdown"), Td(f"{price.get('drawdown_from_peak', 0):.1%}")),
             ])
-        if iv:
-            context_items.append(Tr(Td("IV Rank"), Td(f"{iv.get('iv_rank', '?')}")))
-        if track and "error" not in track:
-            context_items.extend([
-                Tr(Td("Ticker Accuracy"), Td(f"{track.get('overall_accuracy', 0):.1%}")),
-                Tr(Td("Recent 12m"), Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
-            ])
+            if track:
+                context_items.extend([
+                    Tr(Td("Avg Model Accuracy"), Td(f"{track.get('overall_accuracy', 0):.1%}")),
+                    Tr(Td("Avg Recent 12m"), Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
+                ])
+        else:
+            # Single-ticker context
+            if price and "error" not in price:
+                context_items.extend([
+                    Tr(Td("Trend"), Td(f"{price.get('trend', '?').title()}")),
+                    Tr(Td("Vol Regime"), Td(f"{price.get('vol_regime', '?').replace('_', ' ').title()}")),
+                    Tr(Td("20d Vol"), Td(f"{price.get('vol_20d', 0):.1%}")),
+                    Tr(Td("60d Return"), Td(f"{price.get('period_return', 0):.1%}")),
+                ])
+            if iv:
+                context_items.append(Tr(Td("IV Rank"), Td(f"{iv.get('iv_rank', '?')}")))
+            if track and "error" not in track:
+                context_items.extend([
+                    Tr(Td("Ticker Accuracy"), Td(f"{track.get('overall_accuracy', 0):.1%}")),
+                    Tr(Td("Recent 12m"), Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
+                ])
 
+        ctx_label = "Portfolio Context" if is_batch_ctx else "Market Context"
         context_card = Card(
             Table(
                 Thead(Tr(Th("Metric"), Th("Value"))),
@@ -387,7 +405,7 @@ def claude_analysis_card(data: dict):
             ) if context_items else P("Context unavailable.", cls=TextPresets.muted_sm),
             header=Div(
                 UkIcon("activity", height=18, width=18),
-                H4(" Market Context", style=f"color:{_FOUNDERS}; display:inline;"),
+                H4(f" {ctx_label}", style=f"color:{_FOUNDERS}; display:inline;"),
                 style="display:flex; align-items:center; gap:0.5rem;",
             ),
         )

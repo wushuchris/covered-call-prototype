@@ -220,9 +220,44 @@ async def claude_analysis_endpoint(ticker: str = "", date: str = "",
                 "lstm_prediction": "BATCH",
                 "lstm_confidence": 0,
             }
-            # Context for top-confidence ticker (grounds the recommendation)
-            top = max(all_preds, key=lambda p: p.get("lgbm_confidence", 0))
-            context = await invoke_context_graph(ticker=top["ticker"], date=date)
+            # Context for all tickers — summarized for portfolio view
+            all_contexts = {}
+            for t in UNIVERSE:
+                try:
+                    all_contexts[t] = await invoke_context_graph(ticker=t, date=date)
+                except Exception:
+                    all_contexts[t] = {"error": f"Context failed for {t}"}
+
+            # Build portfolio summary from individual contexts
+            valid = {t: c for t, c in all_contexts.items() if "error" not in c}
+            prices = {t: c.get("price", {}) for t, c in valid.items()}
+            tracks = {t: c.get("track_record", {}) for t, c in valid.items()}
+
+            # Aggregate regime signals
+            n_bullish = sum(1 for p in prices.values() if p.get("trend") == "bullish")
+            n_high_vol = sum(1 for p in prices.values() if p.get("vol_regime") == "high_volatility")
+            avg_vol = sum(p.get("vol_20d", 0) for p in prices.values()) / max(len(prices), 1)
+            avg_acc = sum(t.get("overall_accuracy", 0) for t in tracks.values()) / max(len(tracks), 1)
+
+            context = {
+                "batch": True,
+                "n_tickers": len(valid),
+                "price": {
+                    "trend": f"{n_bullish}/{len(valid)} bullish",
+                    "vol_regime": f"{n_high_vol}/{len(valid)} high vol",
+                    "vol_20d": avg_vol,
+                    "current_price": "portfolio",
+                    "period_return": sum(p.get("period_return", 0) for p in prices.values()) / max(len(prices), 1),
+                    "drawdown_from_peak": min((p.get("drawdown_from_peak", 0) for p in prices.values()), default=0),
+                },
+                "features": {"iv": {}},
+                "track_record": {
+                    "overall_accuracy": avg_acc,
+                    "recent_12m_accuracy": sum(t.get("recent_12m_accuracy", 0) for t in tracks.values()) / max(len(tracks), 1),
+                },
+                "per_ticker": all_contexts,
+                "insights_available": True,
+            }
         else:
             # Single ticker
             lgbm = lgbm_predict(ticker, date)
