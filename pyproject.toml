@@ -18,6 +18,9 @@ dependencies = [
     "langgraph",
     "anthropic",
     "python-dotenv",
+    "yfinance",
+    "scipy",
+    "fredapi",
 ]
 
 [tool.setuptools.packages.find]

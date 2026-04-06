@@ -156,6 +156,12 @@ def _build_feature_store():
     df[feature_cols] = scaler.transform(df[feature_cols])
     df[feature_cols] = df[feature_cols].fillna(0.0)
 
+    # Persist scaler for live inference
+    import joblib
+    scaler_path = DATA_DIR / "lstm_scaler.joblib"
+    joblib.dump(scaler, scaler_path)
+    logger.info(f"LSTM scaler saved to {scaler_path}")
+
     # Build windows + run model per symbol
     records = []
     for symbol in sorted(df["symbol"].unique()):
@@ -207,6 +213,17 @@ def _build_feature_store():
 
     _feature_store.to_parquet(FEATURE_STORE_PATH, index=False)
     logger.info(f"LSTM feature store saved: {len(_feature_store)} rows")
+
+
+SCALER_PATH = DATA_DIR / "lstm_scaler.joblib"
+
+
+def get_max_date() -> str:
+    """Return the last date in the LSTM feature store."""
+    global _feature_store
+    if _feature_store is None:
+        initialize()
+    return str(_feature_store["date"].max().date())
 
 
 # ── Public API ───────────────────────────────────────────────────────────

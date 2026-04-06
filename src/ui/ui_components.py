@@ -589,6 +589,7 @@ def inference_results_card(data: dict):
         else:
             chart_el = P("No chart data available.", cls=TextPresets.muted_sm)
 
+        # Warnings
         snap_warning = None
         if data.get("snapped"):
             snap_warning = Div(
@@ -597,6 +598,19 @@ def inference_results_card(data: dict):
                 cls="uk-alert uk-alert-warning",
                 style="padding:0.75rem 1rem; margin-bottom:0.5rem; border-radius:6px; "
                       f"background:{_TORERO}22; border-left:4px solid {_TORERO};",
+            )
+
+        live_warning = None
+        if data.get("is_live"):
+            live_warning = Div(
+                P(Strong("Experimental — Live Pipeline"), style="margin:0 0 0.25rem 0;"),
+                P("Features computed from real-time market data (yfinance), not the historical "
+                  "training dataset. Predictions may differ from backtested performance due to "
+                  "data source differences.",
+                  style="margin:0;", cls=TextPresets.muted_sm),
+                cls="uk-alert",
+                style="padding:0.75rem 1rem; margin-bottom:0.5rem; border-radius:6px; "
+                      f"background:{_IMMACULATA}12; border-left:4px solid {_IMMACULATA};",
             )
 
         disclaimer = P(
@@ -635,6 +649,7 @@ def inference_results_card(data: dict):
         )
 
         return Div(
+            live_warning if live_warning else "",
             snap_warning if snap_warning else "",
             Card(
                 Div(
@@ -1532,20 +1547,21 @@ def _doc_columns(left, right):
 def _docs_overview():
     """Section 1: Project overview."""
     return _doc_section("doc-overview", "Overview",
-        P("Covered call strategies are widely used by institutional and retail investors to enhance portfolio "
-          "income while modestly reducing downside volatility. The strategy involves holding an underlying equity "
-          "position while selling call options against it — generating premium income in exchange for limiting "
-          "potential upside. Although conceptually straightforward, the selection of strike price and time to "
-          "expiration introduces a complex trade-off between premium capture, capital appreciation, and "
-          "assignment risk."),
-        P("This project investigates whether machine learning can improve covered call decision making by "
-          "dynamically selecting the optimal strike and maturity bucket based on observable financial and market "
-          "features. The problem is framed as a multi-class classification task over predefined strategy buckets, "
-          "and the model recommends the contract structure expected to maximize realized risk-adjusted return.", cls="mt-2"),
-        P("Two parallel modeling pipelines were developed: a LightGBM tree-based pipeline with walk-forward "
-          "validation on a simplified 3-class moneyness target (production), and a deep learning pipeline "
-          "(LSTM-CNN with Bahdanau attention, PatchTST transformer) on the full 7-class moneyness-maturity "
-          "space (experimental). Both are documented here.", cls="mt-2"),
+        P("This system is a decision-support tool for covered call strategy selection — not an automated "
+          "trading signal. It evaluates which strike and maturity combination is most likely to produce the "
+          "best risk-adjusted return for a given stock and month, then presents that analysis alongside "
+          "strategy scoring, market context, and model limitations so the portfolio manager can make an "
+          "informed decision."),
+        P("The problem is framed as multi-class classification over predefined strategy buckets. Two parallel "
+          "modeling pipelines were developed and are deployed together: a LightGBM tree-based pipeline with "
+          "walk-forward validation on a 3-class moneyness target (production, macro F1: 0.47), and an "
+          "LSTM-CNN deep learning pipeline on the full 7-class moneyness-maturity space (experimental, "
+          "macro F1: 0.11). Both models run in parallel via a LangGraph DAG, and their outputs feed into "
+          "a Claude AI analysis node that synthesizes a recommended action report.", cls="mt-2"),
+        P("Key finding from our research: model performance is fundamentally constrained by distribution "
+          "shift across market regimes, not by model architecture. All models overfit significantly, and "
+          "the OTM10 baseline strategy remains hard to beat. This system is most valuable as a diagnostic "
+          "tool in regimes where the models show strong agreement and high confidence.", cls="mt-2"),
         Card(
             Div(
                 Div(P(Strong("Universe"), cls=TextPresets.muted_sm),
@@ -1580,11 +1596,11 @@ def _docs_data_pipeline():
           "in an S3 mirror for reproducibility."),
         Card(
             Div(
-                Div(P(Strong("Daily Prices")), P("47,350 observations — OHLCV, adjusted close, dividends, stock splits", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Daily Prices")), P("52,486 observations — OHLCV, adjusted close, dividends, stock splits", cls=TextPresets.muted_sm)),
                 Div(P(Strong("Income Statements")), P("781 quarterly reports — revenue, margins, net income", cls=TextPresets.muted_sm)),
                 Div(P(Strong("Balance Sheets")), P("773 quarterly reports — assets, liabilities, equity", cls=TextPresets.muted_sm)),
                 Div(P(Strong("Cash Flow")), P("778 quarterly reports — operating cash flow, capex", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Options Chains")), P("927K unique contracts after dedup (from 1.85M raw) — monthly board snapshots", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Options Chains")), P("1.12M cleaned contracts (560K calls) — monthly board snapshots", cls=TextPresets.muted_sm)),
                 Div(P(Strong("Company Overview")), P("10 companies — sector, industry, shares outstanding, equity beta", cls=TextPresets.muted_sm)),
                 style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;",
             ),
@@ -1594,9 +1610,8 @@ def _docs_data_pipeline():
         H4("Cleaning & Preprocessing", style=f"color:{_IMMACULATA}; margin-top:1.5rem;"),
         P("Options data represents monthly snapshots of the full options board — all listed contracts at all strikes "
           "and expirations, not executed trades. For AAPL this means ~900 call contracts per snapshot; for smaller "
-          "names like AVGO, ~200. After deduplication from repeated API responses, the dataset was reduced from "
-          "1.85M to 927K unique contracts. Of these, only ~52K (16.2%) fell within the strike and maturity ranges "
-          "relevant to the strategy design (delta 0.10-0.70, DTE 7-150 days)."),
+          "names like AVGO, ~200. The cleaned options dataset contains 1.12M contracts, of which 560K are calls "
+          "within the relevant strike and maturity ranges (delta 0.10-0.70, DTE 7-150 days)."),
         P("Missing data in financial statements ranged from 27% to 56% depending on the variable, but most "
           "corresponded to fields not applicable for certain companies rather than true gaps. Debt-to-equity was "
           "the only engineered feature with missing values (~1% of observations), imputed via median. Financial "
@@ -1605,8 +1620,9 @@ def _docs_data_pipeline():
         P("Quarterly fundamentals were joined to daily data via as-of merge, matching on the most recent fiscal "
           "reporting date to prevent lookahead bias. Observations prior to January 2016 were removed to ensure "
           "sufficient history for rolling window initialization (200-day moving averages). The final modeling "
-          "dataset contains 28 engineered features: 15 technical indicators, 9 fundamental variables, and "
-          "4 valuation metrics.", cls="mt-2"),
+          "dataset contains 1,391 monthly decision points across 10 tickers. The LGBM pipeline uses 34 features "
+          "(27 base + 8 IV-derived, after pruning 5 leaky features); the DL pipeline uses the top 35 features "
+          "selected by Random Forest importance.", cls="mt-2"),
     )
 
 
