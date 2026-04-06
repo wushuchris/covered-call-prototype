@@ -1952,10 +1952,11 @@ def _docs_dl_pipeline():
 def _docs_strategy():
     """Section 7: Post-inference strategy — scoring engine, allocation, backtesting."""
     return _doc_section("doc-strategy", "Strategy & Post-Inference",
-        P("The model predicts a moneyness bucket, but the deployed system adds a scoring and "
-          "allocation layer between model output and trading decisions. This layer — not covered "
-          "in the capstone report — ranks the 10-ticker universe each month, selects which "
-          "positions to take, and sizes them according to configurable presets."),
+        P("The model predicts a moneyness bucket, but a prediction alone is not actionable. The deployed "
+          "system adds a scoring and allocation layer between model output and the portfolio manager's "
+          "decision. This layer — developed post-capstone — ranks the 10-ticker universe each month, "
+          "evaluates each position against multiple scoring criteria, and presents the results alongside "
+          "Claude AI analysis as a decision-support diagnostic."),
         # Scoring engine
         Div(
             H4("Composable Scoring Engine", style=f"color:{_IMMACULATA};"),
@@ -2029,10 +2030,11 @@ def _docs_strategy():
 
 def _docs_results():
     """Section 8: Side-by-side model results comparison of both pipelines."""
-    return _doc_section("doc-results", "Results",
-        P("Both pipelines evaluated on held-out test data with honest temporal splits. "
+    return _doc_section("doc-results", "Results & Limitations",
+        P("Both pipelines were evaluated on held-out test data with honest temporal splits. "
           "Direct F1 comparison across pipelines is misleading (3-class vs 7-class), but "
-          "within each pipeline the progression from baseline to final model is clear."),
+          "within each pipeline the progression from baseline to final model is clear. "
+          "These results inform how much trust to place in each model's diagnostic output."),
         # Side-by-side metrics
         _doc_columns(
             # Left: Tree-based pipeline results
@@ -2088,6 +2090,19 @@ def _docs_results():
               "data-hungry architectures are not appropriate for this dataset size. Macroeconomic "
               "features (FRED) did not contribute meaningfully; stock-level technical and fundamental "
               "features — especially implied volatility measures — proved most informative.", cls="mt-2"),
+            style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
+        ),
+        # Decision-support implications
+        Div(
+            H4("Implications for Decision Support", style=f"color:{_IMMACULATA};"),
+            P("These results define the boundaries of what this system can and cannot do. The LGBM model "
+              "provides a meaningful signal (F1: 0.47) that is most reliable when: (1) model confidence is "
+              "high and both models agree, (2) current market conditions resemble the training data, and "
+              "(3) the prediction is for a frequently observed bucket (ATM, OTM10)."),
+            P("The system should NOT be used for: (1) automated execution without human review, "
+              "(2) high-confidence trading in regimes the model hasn't seen (post-2025 data), or "
+              "(3) minority-class predictions (OTM5) where model recall is weakest. The OTM10 baseline "
+              "strategy remains the safest default when model signals are ambiguous.", cls="mt-2"),
             style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
     )
