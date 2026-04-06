@@ -332,20 +332,29 @@ def claude_analysis_card(data: dict):
 
         # ── Scoring table ──
         scoring = data.get("scoring", {})
+        _strat_tips = {
+            "baseline": "Always sell 10% OTM short-dated calls. No model involved — pure benchmark.",
+            "argmax": "Model's single highest-probability pick. Simple and transparent.",
+            "risk_adjusted": "Picks the bucket that maximizes probability times expected return.",
+            "conservative": "Scored strategy: spreads across 7 positions, prioritizes low-cost trades.",
+        }
         scoring_rows = []
         for key, label in [("baseline", "Baseline (OTM10)"), ("argmax", "Argmax"),
                            ("risk_adjusted", "Risk-Adjusted")]:
             s = scoring.get(key, {})
             ret = s.get("return", 0)
-            scoring_rows.append(Tr(Td(label), Td(f"{ret:.4%}")))
-        for preset in ["conservative"]:  # balanced, aggressive removed per team decision
+            scoring_rows.append(Tr(Td(Span(label, _tip(_strat_tips[key]))), Td(f"{ret:.4%}")))
+        for preset in ["conservative"]:
             s = scoring.get("presets", {}).get(preset, {})
             ret = s.get("return", 0)
-            scoring_rows.append(Tr(Td(preset.title()), Td(f"{ret:.4%}")))
+            scoring_rows.append(Tr(Td(Span(preset.title(), _tip(_strat_tips[preset]))), Td(f"{ret:.4%}")))
 
         scoring_card = Card(
             Table(
-                Thead(Tr(Th("Strategy"), Th("Return"))),
+                Thead(Tr(
+                    Th("Strategy"),
+                    Th(Span("Return", _tip("Realized covered call return for this month using actual options data."))),
+                )),
                 Tbody(*scoring_rows),
                 cls="uk-table uk-table-small uk-table-divider",
             ),
@@ -366,34 +375,47 @@ def claude_analysis_card(data: dict):
 
         context_items = []
         if is_batch_ctx:
-            # Portfolio-level summary
             context_items.extend([
-                Tr(Td("Trend"), Td(str(price.get("trend", "—")))),
-                Tr(Td("High Vol"), Td(str(price.get("vol_regime", "—")))),
-                Tr(Td("Avg 20d Vol"), Td(f"{price.get('vol_20d', 0):.1%}")),
-                Tr(Td("Avg 60d Return"), Td(f"{price.get('period_return', 0):.1%}")),
-                Tr(Td("Worst Drawdown"), Td(f"{price.get('drawdown_from_peak', 0):.1%}")),
+                Tr(Td(Span("Trend", _tip("Overall market direction based on moving average crossovers."))),
+                   Td(str(price.get("trend", "—")))),
+                Tr(Td(Span("High Vol", _tip("Whether the market is in an elevated volatility regime."))),
+                   Td(str(price.get("vol_regime", "—")))),
+                Tr(Td(Span("Avg 20d Vol", _tip("Average annualized volatility over the last 20 trading days across all tickers."))),
+                   Td(f"{price.get('vol_20d', 0):.1%}")),
+                Tr(Td(Span("Avg 60d Return", _tip("Average price change over the last 60 trading days."))),
+                   Td(f"{price.get('period_return', 0):.1%}")),
+                Tr(Td(Span("Worst Drawdown", _tip("Largest peak-to-current drop across the portfolio."))),
+                   Td(f"{price.get('drawdown_from_peak', 0):.1%}")),
             ])
             if track:
                 context_items.extend([
-                    Tr(Td("Avg Model Accuracy"), Td(f"{track.get('overall_accuracy', 0):.1%}")),
-                    Tr(Td("Avg Recent 12m"), Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
+                    Tr(Td(Span("Avg Model Accuracy", _tip("How often the model's historical predictions were correct, averaged across tickers."))),
+                       Td(f"{track.get('overall_accuracy', 0):.1%}")),
+                    Tr(Td(Span("Avg Recent 12m", _tip("Model accuracy over the most recent 12 months only."))),
+                       Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
                 ])
         else:
-            # Single-ticker context
             if price and "error" not in price:
                 context_items.extend([
-                    Tr(Td("Trend"), Td(f"{price.get('trend', '?').title()}")),
-                    Tr(Td("Vol Regime"), Td(f"{price.get('vol_regime', '?').replace('_', ' ').title()}")),
-                    Tr(Td("20d Vol"), Td(f"{price.get('vol_20d', 0):.1%}")),
-                    Tr(Td("60d Return"), Td(f"{price.get('period_return', 0):.1%}")),
+                    Tr(Td(Span("Trend", _tip("Price direction based on moving average crossovers. Bullish = price above key averages."))),
+                       Td(f"{price.get('trend', '?').title()}")),
+                    Tr(Td(Span("Vol Regime", _tip("Current volatility environment. High vol favors shorter-dated options for faster premium capture."))),
+                       Td(f"{price.get('vol_regime', '?').replace('_', ' ').title()}")),
+                    Tr(Td(Span("20d Vol", _tip("Annualized volatility computed from the last 20 trading days."))),
+                       Td(f"{price.get('vol_20d', 0):.1%}")),
+                    Tr(Td(Span("60d Return", _tip("Total price change over the last 60 trading days."))),
+                       Td(f"{price.get('period_return', 0):.1%}")),
                 ])
             if iv:
-                context_items.append(Tr(Td("IV Rank"), Td(f"{iv.get('iv_rank', '?')}")))
+                context_items.append(
+                    Tr(Td(Span("IV Rank", _tip("Current implied volatility as a percentile of its 12-month range. Above 0.5 = elevated vol."))),
+                       Td(f"{iv.get('iv_rank', '?')}")))
             if track and "error" not in track:
                 context_items.extend([
-                    Tr(Td("Ticker Accuracy"), Td(f"{track.get('overall_accuracy', 0):.1%}")),
-                    Tr(Td("Recent 12m"), Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
+                    Tr(Td(Span("Ticker Accuracy", _tip("How often the model correctly predicted this ticker's best bucket historically."))),
+                       Td(f"{track.get('overall_accuracy', 0):.1%}")),
+                    Tr(Td(Span("Recent 12m", _tip("Model accuracy for this ticker over the most recent 12 months."))),
+                       Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
                 ])
 
         ctx_label = "Portfolio Context" if is_batch_ctx else "Market Context"
@@ -458,12 +480,23 @@ def inference_results_card(data: dict):
             Tr(Td("Date"), Td(data.get("date", "—"))),
             # LSTM-CNN (primary)
             Tr(Td(Span(Strong("LSTM-CNN 7-Class"), style=f"color:{_IMMACULATA};")), Td("")),
-            Tr(Td("Bucket"), Td(data.get("lstm_prediction", "—"))),
-            Tr(Td("Confidence"), Td(f"{data.get('lstm_confidence', 0):.1%}")),
+            Tr(Td(Span("Bucket", _tip(
+                "The model's recommended strike and expiry combination. "
+                "7 classes: ATM/OTM5/OTM10 crossed with 30-day or 60-90 day expiry."))),
+               Td(data.get("lstm_prediction", "—"))),
+            Tr(Td(Span("Confidence", _tip(
+                "How strongly the model favors this pick over the alternatives. "
+                "Higher is more decisive, but not necessarily more accurate."))),
+               Td(f"{data.get('lstm_confidence', 0):.1%}")),
             # LGBM (secondary)
             Tr(Td(Span(Strong("LGBM 3-Class"), style=f"color:{_IMMACULATA};")), Td("")),
-            Tr(Td("Bucket"), Td(data.get("model_bucket", "—"))),
-            Tr(Td("Confidence"), Td(f"{data.get('model_confidence', 0):.1%}")),
+            Tr(Td(Span("Bucket", _tip(
+                "Moneyness bucket (ATM/OTM5/OTM10) plus maturity (SHORT or LONG) "
+                "determined by an IV-rank rule."))),
+               Td(data.get("model_bucket", "—"))),
+            Tr(Td(Span("Confidence", _tip(
+                "LGBM prediction probability for its top pick."))),
+               Td(f"{data.get('model_confidence', 0):.1%}")),
         ]
 
         # OHLC chart
