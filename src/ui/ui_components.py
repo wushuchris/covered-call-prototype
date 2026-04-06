@@ -139,6 +139,10 @@ def _navbar():
     return NavBar(
         A("Strategy Diagnostic", href="#daily-inference"),
         A("Docs", href="/docs"),
+        A(UkIcon("refresh-cw", height=18, width=18),
+          href="/trading",
+          style=f"cursor:pointer; color:{_IMMACULATA};",
+          uk_tooltip="title: Clear and reset"),
         brand=A(
             DivLAligned(
                 UkIcon("brain-circuit", height=20, width=20),
