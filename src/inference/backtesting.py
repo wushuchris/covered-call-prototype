@@ -424,6 +424,14 @@ async def run_backtest_all(budget: float = 100_000, year: str = "all",
         lstm_monthly = get_monthly_predictions()
         lstm_monthly = lstm_monthly[lstm_monthly["year_month"].notna()].copy()
 
+        # Filter to months that have bucket returns (LSTM starts earlier than options data)
+        br_path = _PROJECT_ROOT / "src" / "data" / "bucket_returns.parquet"
+        if br_path.exists():
+            br_months = set(
+                pd.read_parquet(br_path)["year_month"].astype("period[M]").unique()
+            )
+            lstm_monthly = lstm_monthly[lstm_monthly["year_month"].isin(br_months)]
+
         if year != "all":
             lstm_monthly = lstm_monthly[
                 lstm_monthly["date"].dt.year == int(year)
