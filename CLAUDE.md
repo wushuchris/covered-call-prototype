@@ -1,4 +1,4 @@
-# CLAUDE.md — Covered Call Prototype
+# CLAUDE.md - Covered Call Prototype
 
 ## Project Overview
 
@@ -16,28 +16,28 @@ Predicts which moneyness bucket (ATM, OTM5, OTM10) yields the best covered call 
 Two-microservice system, both Python. No JS. No databases.
 
 ```
-main.py                          — dev launcher (Popen, both services)
-deploy/setup_services.sh         — systemd (gunicorn + uvicorn), auto-start
+main.py                          - dev launcher (Popen, both services)
+deploy/setup_services.sh         - systemd (gunicorn + uvicorn), auto-start
 
 src/
-├── utils.py                     — logger, log_call decorator, ServiceRequest (shared Pydantic model)
-├── data/                        — computed parquets (bucket_returns)
+├── utils.py                     - logger, log_call decorator, ServiceRequest (shared Pydantic model)
+├── data/                        - computed parquets (bucket_returns)
 ├── ui/
-│   ├── app.py                   — FastHTML :8008 (routes, USD branding, local fonts)
-│   ├── ui_components.py         — MonsterUI component tree (launcher, trading, docs screens)
-│   ├── ui_handler.py            — aiohttp bridge to inference service
-│   ├── ui_utils.py              — pack_request, send_to_inference
-│   └── static/                  — logo, fonts (served locally, no external API calls)
+│   ├── app.py                   - FastHTML :8008 (routes, USD branding, local fonts)
+│   ├── ui_components.py         - MonsterUI component tree (launcher, trading, docs screens)
+│   ├── ui_handler.py            - aiohttp bridge to inference service
+│   ├── ui_utils.py              - pack_request, send_to_inference
+│   └── static/                  - logo, fonts (served locally, no external API calls)
 └── inference/
-    ├── app.py                   — FastAPI :8009 (/inference, /inference_batch, /backtest, /model_metrics, /chart_data)
-    ├── model.py                 — model loading, feature store, predict_bucket(), compute_model_metrics()
-    ├── daily.py                 — single-day + batch inference orchestration
-    ├── chart.py                 — OHLC candlestick data builder
-    ├── strategy.py              — simulate_inference() wrapper (NautilusTrader removed)
-    ├── scoring.py               — composable scoring engine (confidence, TC, delta-hedge)
-    ├── backtesting.py           — backtest loop + caching (Argmax, Risk-Adjusted, 3 presets)
-    ├── inference_utils.py       — input validation
-    └── nautilus_reference.py    — commented-out NautilusTrader class (reference only)
+    ├── app.py                   - FastAPI :8009 (/inference, /inference_batch, /backtest, /model_metrics, /chart_data)
+    ├── model.py                 - model loading, feature store, predict_bucket(), compute_model_metrics()
+    ├── daily.py                 - single-day + batch inference orchestration
+    ├── chart.py                 - OHLC candlestick data builder
+    ├── strategy.py              - simulate_inference() wrapper (NautilusTrader removed)
+    ├── scoring.py               - composable scoring engine (confidence, TC, delta-hedge)
+    ├── backtesting.py           - backtest loop + caching (Argmax, Risk-Adjusted, 3 presets)
+    ├── inference_utils.py       - input validation
+    └── nautilus_reference.py    - commented-out NautilusTrader class (reference only)
 ```
 
 ### Data Flow
@@ -60,30 +60,30 @@ Zero-trust: neither service knows the other's internals, they only share the dat
 
 These are non-negotiable. Taken from `persistence_agent/microservices_grounding.md`.
 
-1. **Python only** — No JavaScript. FastHTML + MonsterUI handle all UI. ApexCharts via `<uk-chart>`.
-2. **No databases** — Minimal side-effects/persistence. Parquet files and JSON caches only.
-3. **Async first** — Don't block the event loop. Use `async def` for all service entry points and inter-service calls.
-4. **One-shot calls** — Each request triggers a chain of functions and returns a self-contained Div. Sections can run concurrently.
-5. **Modularity (zero-trust)** — A file/section/service does not know and does not care how the next on-chain function handles information. Exception: shared `ServiceRequest` format.
-6. **Functional first** — No OOP where it isn't needed. Plain function calls are fine.
-7. **Readable** — Teammates must be able to understand the code and follow along. If things get too abstract, simplify.
-8. **Docstrings** — On all relevant functions.
-9. **Try-except** — On all service entry points and anywhere failure should be logged rather than crash.
-10. **Minimal dependencies** — FastHTML, MonsterUI, FastAPI, Pydantic, LightGBM, scikit-learn, joblib. Do not add new deps without explicit approval.
-11. **UI blocks during requests** — Temporary blocks on interactive elements until the previous response finishes rendering. If something fails, a generic fallback Div keeps the chain going.
+1. **Python only** - No JavaScript. FastHTML + MonsterUI handle all UI. ApexCharts via `<uk-chart>`.
+2. **No databases** - Minimal side-effects/persistence. Parquet files and JSON caches only.
+3. **Async first** - Don't block the event loop. Use `async def` for all service entry points and inter-service calls.
+4. **One-shot calls** - Each request triggers a chain of functions and returns a self-contained Div. Sections can run concurrently.
+5. **Modularity (zero-trust)** - A file/section/service does not know and does not care how the next on-chain function handles information. Exception: shared `ServiceRequest` format.
+6. **Functional first** - No OOP where it isn't needed. Plain function calls are fine.
+7. **Readable** - Teammates must be able to understand the code and follow along. If things get too abstract, simplify.
+8. **Docstrings** - On all relevant functions.
+9. **Try-except** - On all service entry points and anywhere failure should be logged rather than crash.
+10. **Minimal dependencies** - FastHTML, MonsterUI, FastAPI, Pydantic, LightGBM, scikit-learn, joblib. Do not add new deps without explicit approval.
+11. **UI blocks during requests** - Temporary blocks on interactive elements until the previous response finishes rendering. If something fails, a generic fallback Div keeps the chain going.
 
 ---
 
 ## Strategy & Backtesting
 
-The scoring engine in `src/inference/scoring.py` sits between model predictions and trading decisions. NautilusTrader was evaluated and removed — the backtest loop runs in plain Python.
+The scoring engine in `src/inference/scoring.py` sits between model predictions and trading decisions. NautilusTrader was evaluated and removed - the backtest loop runs in plain Python.
 
 ### Scoring Engine
 
 Three weighted score components per ticker per month:
-1. **Model Confidence** — LGBM prediction probability
-2. **Transaction Cost** — bid-ask spread + turnover penalty
-3. **Delta-Hedged Return** — vol premium after removing directional exposure
+1. **Model Confidence** - LGBM prediction probability
+2. **Transaction Cost** - bid-ask spread + turnover penalty
+3. **Delta-Hedged Return** - vol premium after removing directional exposure
 
 ### Strategy Presets
 
@@ -95,9 +95,9 @@ Three weighted score components per ticker per month:
 
 ### Additional Strategies (no scoring)
 
-- **Argmax** — model's top pick per ticker, all tickers, equal weight
-- **Risk-Adjusted** — P(bucket) × E[return|bucket], expanding historical averages, all tickers, equal weight
-- **Baseline** — OTM10 short-dated on all tickers, equal weight (no model)
+- **Argmax** - model's top pick per ticker, all tickers, equal weight
+- **Risk-Adjusted** - P(bucket) × E[return|bucket], expanding historical averages, all tickers, equal weight
+- **Baseline** - OTM10 short-dated on all tickers, equal weight (no model)
 
 ### Production Model
 
@@ -120,22 +120,22 @@ UNIVERSE = ["AAPL", "AMZN", "AVGO", "GOOG", "GOOGL", "META", "MSFT", "NVDA", "TS
 
 ```
 data/processed/
-    daily_clean.parquet          — cleaned daily OHLCV (all tickers)
-    options_clean.parquet        — cleaned options chains
-    modeling_data.parquet        — daily features + labels (29K rows)
-    monthly_labels.parquet       — monthly labels (1,391 rows)
+    daily_clean.parquet          - cleaned daily OHLCV (all tickers)
+    options_clean.parquet        - cleaned options chains
+    modeling_data.parquet        - daily features + labels (29K rows)
+    monthly_labels.parquet       - monthly labels (1,391 rows)
 
 models/
-    lgbm_3class_moneyness.joblib   — production model (34 features, walk-forward trained)
-    improved_model_metadata.json   — stale (lists 27 features, model uses 34 via model.feature_name_)
+    lgbm_3class_moneyness.joblib   - production model (34 features, walk-forward trained)
+    improved_model_metadata.json   - stale (lists 27 features, model uses 34 via model.feature_name_)
 
 saved_models/
-    lstm_cnn_best_model.pth        — team's LSTM-CNN (7-class, deployed on Streamlit)
+    lstm_cnn_best_model.pth        - team's LSTM-CNN (7-class, deployed on Streamlit)
 
 src/data/
-    bucket_returns.parquet         — per-bucket realized returns for backtesting
+    bucket_returns.parquet         - per-bucket realized returns for backtesting
 
-reports/figures/                 — all PNGs for /docs screen
+reports/figures/                 - all PNGs for /docs screen
 ```
 
 ---
@@ -146,8 +146,9 @@ reports/figures/                 — all PNGs for /docs screen
 - **Docstrings** on all public functions.
 - **Try-except with logging** on all service entry points.
 - **Ruff** for linting (`ruff check`).
-- **No testing framework** — happy-path diagnostic scripts only. If it breaks on the happy path, log it and fix it.
-- **Informal git commits** — no conventional commit enforcement.
+- **No testing framework** - happy-path diagnostic scripts only. If it breaks on the happy path, log it and fix it.
+- **Informal git commits** - no conventional commit enforcement.
+- **No em dashes** - use hyphens (`-`) or rephrased sentences. Never use `—` in code, UI text, comments, or docs.
 
 ---
 

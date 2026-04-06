@@ -46,7 +46,7 @@ def _fallback(component_name: str):
 def _tip(text: str):
     """Render a small tooltip bubble (?) with hover explanation.
 
-    Uses UIKit's uk-tooltip — no JS, just a data attribute.
+    Uses UIKit's uk-tooltip -no JS, just a data attribute.
     Styled as a small circular icon inline with text.
 
     Args:
@@ -184,17 +184,17 @@ def _daily_inference_section():
     """
     return Section(
         H3("Strategy Diagnostic", style=f"color:{_FOUNDERS};"),
-        P("Decision-support diagnostic — evaluate model predictions, strategy scoring, and market context for covered call selection.",
+        P("Decision-support diagnostic. Evaluate model predictions, strategy scoring, and market context for covered call selection.",
           cls=TextPresets.muted_sm),
         DividerLine(),
         Grid(
-            # results panel — left (spans 4 of 7 cols)
+            # results panel -left (spans 4 of 7 cols)
             Div(_inference_results_panel(), cls="col-span-4"),
-            # sidebar — right (spans 3 of 7 cols)
+            # sidebar -right (spans 3 of 7 cols)
             Div(_inference_sidebar(), cls="col-span-3"),
             cols_xl=7, cols_lg=7, cols_md=1, cols_sm=1, gap=4,
         ),
-        # Claude analysis panel — full width below the grid, swapped via htmx
+        # Claude analysis panel -full width below the grid, swapped via htmx
         _claude_analysis_panel(),
         id="daily-inference",
     )
@@ -207,10 +207,10 @@ def _inference_sidebar():
         Card with form controls.
     """
     return Card(
-        # date input — defaults to today
+        # date input -defaults to today
         Label("Date"),
         Input(type="date", name="date", id="inference-date", value=date.today().isoformat()),
-        # today checkbox — pure htmx, no JS. hx_get swaps the date input for today's value
+        # today checkbox. Purehtmx, no JS. hx_get swaps the date input for today's value
         Div(
             Label(
                 CheckboxX(id="today-check", checked=True,
@@ -228,7 +228,7 @@ def _inference_sidebar():
             name="ticker", id="inference-ticker",
             disabled=True, style="opacity:0.5;",
         ),
-        # batch checkbox — default checked (all stocks), uncheck for single ticker
+        # batch checkbox -default checked (all stocks), uncheck for single ticker
         Div(
             Label(
                 CheckboxX(id="batch-check", name="batch", checked=True,
@@ -240,7 +240,7 @@ def _inference_sidebar():
             ),
             cls="mt-2",
         ),
-        # compute button — posts to /inference_call, swaps results panel
+        # compute button -posts to /inference_call, swaps results panel
         Button("Run Diagnostic",
                cls="w-full mt-4",
                style=f"background-color:{_IMMACULATA}; color:white;",
@@ -263,21 +263,21 @@ def _inference_results_panel():
     """
     # show the same layout as computed results, but with blank values
     blank_data = {
-        "Ticker": "—", "Date": "—", "Month": "—", "Model": "—",
-        "Prediction": "—", "Confidence": "—",
-        "Baseline": "—", "Sample": "—",
+        "Ticker": "-", "Date": "-", "Month": "-", "Model": "-",
+        "Prediction": "-", "Confidence": "-",
+        "Baseline": "-", "Sample": "-",
     }
     header = ["Metric", "Value"]
     body = [{"Metric": k, "Value": v} for k, v in blank_data.items()]
     return Div(
         Card(
             Div(
-                # table side — left ~40%
+                # table side -left ~40%
                 Div(
                     TableFromDicts(header_data=header, body_data=body),
                     style="flex:2;",
                 ),
-                # chart side — right ~60%
+                # chart side -right ~60%
                 Div(
                     P("Chart placeholder", cls=TextPresets.muted_sm),
                     style=f"flex:3; min-height:200px; border:1px dashed {_TORERO}; border-radius:8px; "
@@ -336,7 +336,7 @@ def claude_analysis_card(data: dict):
         # ── Scoring table ──
         scoring = data.get("scoring", {})
         _strat_tips = {
-            "baseline": "Always sell 10% OTM short-dated calls. No model involved — pure benchmark.",
+            "baseline": "Always sell 10% OTM short-dated calls. No model involved. Purebenchmark.",
             "argmax": "Model's single highest-probability pick. Simple and transparent.",
             "risk_adjusted": "Picks the bucket that maximizes probability times expected return.",
             "conservative": "Scored strategy: spreads across 7 positions, prioritizes low-cost trades.",
@@ -380,9 +380,9 @@ def claude_analysis_card(data: dict):
         if is_batch_ctx:
             context_items.extend([
                 Tr(Td(Span("Trend", _tip("Overall market direction based on moving average crossovers."))),
-                   Td(str(price.get("trend", "—")))),
+                   Td(str(price.get("trend", "-")))),
                 Tr(Td(Span("Vol Regime", _tip("Current volatility environment across the portfolio."))),
-                   Td(str(price.get("vol_regime", "—")))),
+                   Td(str(price.get("vol_regime", "-")))),
                 Tr(Td(Span("Avg 20d Realized Vol", _tip("Average annualized realized volatility over the last 20 trading days across all tickers."))),
                    Td(f"{price.get('vol_20d', 0):.1%}")),
                 Tr(Td(Span("60d Return (Avg)", _tip("Average price change over the last 60 trading days across all tickers."))),
@@ -551,14 +551,14 @@ def inference_results_card(data: dict):
     try:
         # Table: ticker, date, LSTM first (default model), then LGBM
         table_rows = [
-            Tr(Td("Ticker"), Td(data.get("ticker", "—"))),
-            Tr(Td("Date"), Td(data.get("date", "—"))),
+            Tr(Td("Ticker"), Td(data.get("ticker", "-"))),
+            Tr(Td("Date"), Td(data.get("date", "-"))),
             # LSTM-CNN (primary)
             Tr(Td(Span(Strong("LSTM-CNN 7-Class"), style=f"color:{_IMMACULATA};")), Td("")),
             Tr(Td(Span("Bucket", _tip(
                 "The model's recommended strike and expiry combination. "
                 "7 classes: ATM/OTM5/OTM10 crossed with 30-day or 60-90 day expiry."))),
-               Td(data.get("lstm_prediction", "—"))),
+               Td(data.get("lstm_prediction", "-"))),
             Tr(Td(Span("Confidence", _tip(
                 "How strongly the model favors this pick over the alternatives. "
                 "Higher is more decisive, but not necessarily more accurate."))),
@@ -568,7 +568,7 @@ def inference_results_card(data: dict):
             Tr(Td(Span("Bucket", _tip(
                 "Moneyness bucket (ATM/OTM5/OTM10) plus maturity (SHORT or LONG) "
                 "determined by an IV-rank rule."))),
-               Td(data.get("model_bucket", "—"))),
+               Td(data.get("model_bucket", "-"))),
             Tr(Td(Span("Confidence", _tip(
                 "LGBM prediction probability for its top pick."))),
                Td(f"{data.get('model_confidence', 0):.1%}")),
@@ -593,7 +593,7 @@ def inference_results_card(data: dict):
         snap_warning = None
         if data.get("snapped"):
             snap_warning = Div(
-                P(f"No data for requested date — showing nearest available: {data.get('month', '?')}",
+                P(f"No data for requested date. Showingnearest available: {data.get('month', '?')}",
                   style="margin:0;"),
                 cls="uk-alert uk-alert-warning",
                 style="padding:0.75rem 1rem; margin-bottom:0.5rem; border-radius:6px; "
@@ -603,7 +603,7 @@ def inference_results_card(data: dict):
         live_warning = None
         if data.get("is_live"):
             live_warning = Div(
-                P(Strong("Experimental — Live Pipeline"), style="margin:0 0 0.25rem 0;"),
+                P(Strong("Experimental -Live Pipeline"), style="margin:0 0 0.25rem 0;"),
                 P("Features computed from real-time market data (yfinance), not the historical "
                   "training dataset. Predictions may differ from backtested performance due to "
                   "data source differences.",
@@ -614,7 +614,7 @@ def inference_results_card(data: dict):
             )
 
         disclaimer = P(
-            "Confidence reflects how strongly each model favors its pick — "
+            "Confidence reflects how strongly each model favors its pick -"
             "it does not guarantee the outcome. Past model accuracy varies by market conditions.",
             cls=TextPresets.muted_sm,
             style="font-style:italic; margin-top:0.75rem; padding-top:0.5rem; "
@@ -665,7 +665,7 @@ def inference_results_card(data: dict):
                     Div(chart_el, style="flex:3; min-height:200px;"),
                     style="display:flex; gap:1rem;",
                 ),
-                header=H4(f"Diagnostic — {data.get('ticker', '?')} @ {data.get('date', '?')}",
+                header=H4(f"Diagnostic -{data.get('ticker', '?')} @ {data.get('date', '?')}",
                            style=f"color:{_FOUNDERS};"),
             ),
             # OOB swap replaces the Claude analysis panel with loading → auto-fetch
@@ -678,7 +678,7 @@ def inference_results_card(data: dict):
 def _batch_ticker_chart_modal(ticker: str, date: str):
     """Render a per-ticker candlestick chart inside a modal via lazy loading.
 
-    The chart is NOT pre-loaded — it fetches via htmx when the modal opens.
+    The chart is NOT pre-loaded; itfetches via htmx when the modal opens.
     ApexCharts can't render in hidden containers (0x0 dimensions), so we
     use hx-trigger='intersect once' to load after the modal is visible.
 
@@ -703,7 +703,7 @@ def _batch_ticker_chart_modal(ticker: str, date: str):
                 hx_swap="innerHTML",
                 style="min-height:350px;",
             ),
-            header=f"{ticker} — Price Chart",
+            header=f"{ticker}: Price Chart",
             id=modal_id,
             dialog_cls="uk-modal-dialog-large",
         ),
@@ -728,8 +728,8 @@ def batch_results_card(data: dict):
 
         # ── Summary stats card ──
         stats_display = {
-            "Date": summary.get("date", "—"),
-            "Models": summary.get("model", "—"),
+            "Date": summary.get("date", "-"),
+            "Models": summary.get("model", "-"),
             "Tickers": str(summary.get("n_tickers", 0)),
         }
         stats_header = ["Metric", "Value"]
@@ -743,10 +743,10 @@ def batch_results_card(data: dict):
                 continue
             detail_rows.append({
                 "Ticker": r.get("ticker", "?"),
-                "Prediction": r.get("model_bucket", "—"),
+                "Prediction": r.get("model_bucket", "-"),
                 "Confidence": f"{r.get('model_confidence', 0):.1%}",
                 "Correct": "Y" if r.get("model_correct") else "N",
-                "Sample": r.get("sample_type", "—"),
+                "Sample": r.get("sample_type", "-"),
             })
 
         detail_header = ["Ticker", "LSTM-CNN", "LSTM Conf", "LGBM", "LGBM Conf", "Chart"]
@@ -761,9 +761,9 @@ def batch_results_card(data: dict):
             table_rows.append(
                 Tr(
                     Td(Strong(ticker)),
-                    Td(r.get("lstm_prediction", "—")),
+                    Td(r.get("lstm_prediction", "-")),
                     Td(f"{r.get('lstm_confidence', 0):.1%}"),
-                    Td(r.get("model_bucket", "—")),
+                    Td(r.get("model_bucket", "-")),
                     Td(f"{r.get('model_confidence', 0):.1%}"),
                     Td(_batch_ticker_chart_modal(ticker, batch_date)),
                 )
@@ -775,13 +775,13 @@ def batch_results_card(data: dict):
             cls="uk-table uk-table-small uk-table-divider",
         )
 
-        # Snap warning for batch — show which tickers snapped
+        # Snap warning for batch -show which tickers snapped
         snapped_tickers = [r.get("ticker") for r in results
                            if "error" not in r and r.get("snapped")]
         batch_snap_warning = None
         if snapped_tickers:
             batch_snap_warning = Div(
-                P(f"Date snapped for: {', '.join(snapped_tickers)} — showing nearest available month.",
+                P(f"Date snapped for: {', '.join(snapped_tickers)}. Showingnearest available month.",
                   style="margin:0;"),
                 cls="uk-alert uk-alert-warning",
                 style="padding:0.75rem 1rem; margin-bottom:0.5rem; border-radius:6px; "
@@ -812,13 +812,13 @@ def batch_results_card(data: dict):
                     ),
                     style="display:flex; gap:1rem;",
                 ),
-                header=H4(f"Batch Diagnostic — {summary.get('date', '?')} ({summary.get('n_tickers', 0)} tickers)",
+                header=H4(f"Batch Diagnostic -{summary.get('date', '?')} ({summary.get('n_tickers', 0)} tickers)",
                           style=f"color:{_FOUNDERS};"),
             ),
             # Detail modal with per-ticker rows + chart icons
             Modal(
                 detail_table,
-                header=f"All Results — {summary.get('date', '?')}",
+                header=f"All Results -{summary.get('date', '?')}",
                 id=detail_modal_id,
                 dialog_cls="uk-modal-dialog-large",
             ),
@@ -960,7 +960,7 @@ def backtest_results_card(data: dict, mode: str = "absolute"):
                 if is_delta:
                     rows.append(Tr(
                         Td(Span(label, _tip(tip))),
-                        Td("—"),
+                        Td("-"),
                         Td(fmt_d(am.get(key, 0) - bv)),
                         Td(fmt_d(ra.get(key, 0) - bv)),
                         Td(fmt_d(cm.get(key, 0) - bv)),
@@ -1004,9 +1004,9 @@ def backtest_results_card(data: dict, mode: str = "absolute"):
                 _strat_table({"argmax": lstm.get("argmax", {}),
                               "risk_adjusted": lstm.get("risk_adjusted", {}),
                               "conservative": lstm.get("conservative", {})},
-                             f"LSTM-CNN 7-Class — {lstm_period}"),
+                             f"LSTM-CNN 7-Class -{lstm_period}"),
                 DividerLine(),
-                _strat_table(lgbm, f"LGBM 3-Class — {lgbm_period}"),
+                _strat_table(lgbm, f"LGBM 3-Class -{lgbm_period}"),
                 header=H4("Strategy Comparison", style=f"color:{_FOUNDERS};"),
             ),
         )
@@ -1137,7 +1137,7 @@ def _model_summary_block(d: dict, classes: list):
         Span("Confidence", _tip(
             "Average model certainty when it gets the answer right vs wrong. "
             "If these numbers are close, the model can't tell when it's guessing.")),
-        f" — correct: {conf.get('avg_when_correct', 0):.1%}, "
+        f", correct: {conf.get('avg_when_correct', 0):.1%}, "
         f"incorrect: {conf.get('avg_when_incorrect', 0):.1%}, "
         f"overall: {conf.get('overall_avg', 0):.1%}",
         cls=TextPresets.muted_sm, style="margin-top:0.5rem;",
@@ -1172,7 +1172,7 @@ def model_performance_card(data: dict):
 
         # Training scope disclaimer
         disclaimer = Div(
-            P("These models were trained on different data, targets, and time periods — "
+            P("These models were trained on different data, targets, and time periods -"
               "direct comparison requires context.",
               style="font-weight:600; margin-bottom:0.25rem;"),
             P("LSTM-CNN: 35 daily features (price + fundamentals + FRED macro), "
@@ -1205,7 +1205,7 @@ def model_performance_card(data: dict):
             style="display:flex; gap:0; margin-top:0.5rem;",
         )
 
-        # Per-year breakdown (LGBM — has longer history)
+        # Per-year breakdown (LGBM -has longer history)
         per_year = lgbm.get("per_year", [])
         year_header = ["Year", "Accuracy", "Macro F1", "Samples"]
         year_rows = [
@@ -1310,7 +1310,7 @@ def mlflow_experiments_card(data: dict):
 
             # Hyperparameters modal
             params = run.get("params", {})
-            params_cell = "—"
+            params_cell = "-"
             if params:
                 params_modal_id = f"params-{run_id}"
                 param_items = [
@@ -1330,7 +1330,7 @@ def mlflow_experiments_card(data: dict):
                             Tbody(*param_items),
                             cls="uk-table uk-table-small uk-table-divider",
                         ),
-                        header=f"{run['run_name']} — Hyperparameters",
+                        header=f"{run['run_name']}: Hyperparameters",
                         id=params_modal_id,
                     )
                 )
@@ -1352,7 +1352,7 @@ def mlflow_experiments_card(data: dict):
                     Modal(
                         Img(src=f"/mlruns/{cm_path}", alt="Confusion Matrix",
                             style="width:100%; border-radius:6px;"),
-                        header=f"{run['run_name']} — Confusion Matrix",
+                        header=f"{run['run_name']}: Confusion Matrix",
                         id=cm_modal_id,
                         dialog_cls="uk-modal-dialog-large",
                     )
@@ -1370,7 +1370,7 @@ def mlflow_experiments_card(data: dict):
                     Modal(
                         Img(src=f"/mlruns/{roc_path}", alt="ROC Curves",
                             style="width:100%; border-radius:6px;"),
-                        header=f"{run['run_name']} — ROC Curves",
+                        header=f"{run['run_name']}: ROC Curves",
                         id=roc_modal_id,
                         dialog_cls="uk-modal-dialog-large",
                     )
@@ -1378,15 +1378,15 @@ def mlflow_experiments_card(data: dict):
 
             rows.append(Tr(
                 Td(Strong(run["run_name"])),
-                Td(run.get("variant", "—")),
-                Td(run.get("n_classes", "—")),
-                Td(run.get("n_features", "—")),
-                Td(f"{m.get('val_macro_f1', 0):.3f}" if m.get("val_macro_f1") else "—"),
-                Td(f"{m.get('test_macro_f1', 0):.3f}" if m.get("test_macro_f1") else "—"),
-                Td(f"{m.get('test_accuracy', 0):.1%}" if m.get("test_accuracy") else "—"),
-                Td(f"{m.get('test_balanced_accuracy', 0):.1%}" if m.get("test_balanced_accuracy") else "—"),
+                Td(run.get("variant", "-")),
+                Td(run.get("n_classes", "-")),
+                Td(run.get("n_features", "-")),
+                Td(f"{m.get('val_macro_f1', 0):.3f}" if m.get("val_macro_f1") else "-"),
+                Td(f"{m.get('test_macro_f1', 0):.3f}" if m.get("test_macro_f1") else "-"),
+                Td(f"{m.get('test_accuracy', 0):.1%}" if m.get("test_accuracy") else "-"),
+                Td(f"{m.get('test_balanced_accuracy', 0):.1%}" if m.get("test_balanced_accuracy") else "-"),
                 Td(params_cell),
-                Td(Span(*plot_links) if plot_links else "—"),
+                Td(Span(*plot_links) if plot_links else "-"),
             ))
 
         exp_name = experiments[0].get("experiment_name", "Unknown")
@@ -1398,7 +1398,7 @@ def mlflow_experiments_card(data: dict):
                 P(f"Experiment: {exp_name} | {total} total runs, {unique} unique",
                   cls=TextPresets.muted_sm),
                 P("Deep learning and XGBoost runs tracked via MLflow (7-class task). "
-                  "LGBM 3-class production model tracked separately via walk-forward validation — included for comparison.",
+                  "LGBM 3-class production model tracked separately via walk-forward validation, included for comparison.",
                   cls=TextPresets.muted_sm, style="margin-top:0.25rem; font-style:italic;"),
                 DividerLine(),
                 Table(Thead(header), Tbody(*rows),
@@ -1547,7 +1547,7 @@ def _doc_columns(left, right):
 def _docs_overview():
     """Section 1: Project overview."""
     return _doc_section("doc-overview", "Overview",
-        P("This system is a decision-support tool for covered call strategy selection — not an automated "
+        P("This system is a decision-support tool for covered call strategy selection, notan automated "
           "trading signal. It evaluates which strike and maturity combination is most likely to produce the "
           "best risk-adjusted return for a given stock and month, then presents that analysis alongside "
           "strategy scoring, market context, and model limitations so the portfolio manager can make an "
@@ -1567,19 +1567,19 @@ def _docs_overview():
                 Div(P(Strong("Universe"), cls=TextPresets.muted_sm),
                     P("AAPL, AMZN, AVGO, GOOG, GOOGL, META, MSFT, NVDA, TSLA, WMT")),
                 Div(P(Strong("Decision Frequency"), cls=TextPresets.muted_sm),
-                    P("Monthly — last trading day of each month")),
+                    P("Monthly (last trading day of each month)")),
                 Div(P(Strong("Moneyness Buckets"), cls=TextPresets.muted_sm),
                     P("ATM (delta 0.45-0.60), OTM5 (0.30-0.45), OTM10 (0.15-0.30)")),
                 Div(P(Strong("Maturity Buckets"), cls=TextPresets.muted_sm),
                     P("SHORT (DTE 7-45), LONG (DTE 46-120)")),
                 Div(P(Strong("Data Period"), cls=TextPresets.muted_sm),
-                    P("2015-2025 — daily prices, options chains, quarterly fundamentals")),
+                    P("2015-2025: daily prices, options chains, quarterly fundamentals")),
                 Div(P(Strong("Data Sources"), cls=TextPresets.muted_sm),
                     P("Alpha Vantage API (equities, options, fundamentals) + FRED (macro indicators)")),
                 Div(P(Strong("LightGBM Pipeline"), cls=TextPresets.muted_sm),
-                    P("3-class moneyness + IV-rank maturity rule — production model (0.47 walk-forward F1)")),
+                    P("3-class moneyness + IV-rank maturity rule. Production model (0.47 walk-forward F1)")),
                 Div(P(Strong("Deep Learning Pipeline"), cls=TextPresets.muted_sm),
-                    P("7-class LSTM-CNN + PatchTST — experimental (0.11 best test F1)")),
+                    P("7-class LSTM-CNN + PatchTST. Experimental (0.11 best test F1)")),
                 style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;",
             ),
             header=H4("System Summary", style=f"color:{_IMMACULATA};"),
@@ -1596,26 +1596,26 @@ def _docs_data_pipeline():
           "in an S3 mirror for reproducibility."),
         Card(
             Div(
-                Div(P(Strong("Daily Prices")), P("52,486 observations — OHLCV, adjusted close, dividends, stock splits", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Income Statements")), P("781 quarterly reports — revenue, margins, net income", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Balance Sheets")), P("773 quarterly reports — assets, liabilities, equity", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Cash Flow")), P("778 quarterly reports — operating cash flow, capex", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Options Chains")), P("1.12M cleaned contracts (560K calls) — monthly board snapshots", cls=TextPresets.muted_sm)),
-                Div(P(Strong("Company Overview")), P("10 companies — sector, industry, shares outstanding, equity beta", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Daily Prices")), P("52,486 observations -OHLCV, adjusted close, dividends, stock splits", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Income Statements")), P("781 quarterly reports -revenue, margins, net income", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Balance Sheets")), P("773 quarterly reports -assets, liabilities, equity", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Cash Flow")), P("778 quarterly reports -operating cash flow, capex", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Options Chains")), P("1.12M cleaned contracts (560K calls) -monthly board snapshots", cls=TextPresets.muted_sm)),
+                Div(P(Strong("Company Overview")), P("10 companies -sector, industry, shares outstanding, equity beta", cls=TextPresets.muted_sm)),
                 style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;",
             ),
             header=H4("Data Sources", style=f"color:{_IMMACULATA};"),
             cls="mt-2",
         ),
         H4("Cleaning & Preprocessing", style=f"color:{_IMMACULATA}; margin-top:1.5rem;"),
-        P("Options data represents monthly snapshots of the full options board — all listed contracts at all strikes "
+        P("Options data represents monthly snapshots of the full options board: alllisted contracts at all strikes "
           "and expirations, not executed trades. For AAPL this means ~900 call contracts per snapshot; for smaller "
           "names like AVGO, ~200. The cleaned options dataset contains 1.12M contracts, of which 560K are calls "
           "within the relevant strike and maturity ranges (delta 0.10-0.70, DTE 7-150 days)."),
         P("Missing data in financial statements ranged from 27% to 56% depending on the variable, but most "
           "corresponded to fields not applicable for certain companies rather than true gaps. Debt-to-equity was "
           "the only engineered feature with missing values (~1% of observations), imputed via median. Financial "
-          "ratios were clipped to economically reasonable ranges — P/E to [-100, 500], FCF yield to [-1, 1] — "
+          "ratios were clipped to economically reasonable ranges: P/E to [-100, 500], FCF yield to [-1, 1]."
           "to remove distortions from near-zero denominators.", cls="mt-2"),
         P("Quarterly fundamentals were joined to daily data via as-of merge, matching on the most recent fiscal "
           "reporting date to prevent lookahead bias. Observations prior to January 2016 were removed to ensure "
@@ -1664,7 +1664,7 @@ def _docs_eda():
                 H4("Optimal Bucket Distribution", style=f"color:{_IMMACULATA};"),
                 P("The best moneyness bucket (highest realized covered call return) varies by year, ticker, "
                   "and market conditions. ATM dominates across all years and most tickers."),
-                P("Class imbalance is significant — ATM accounts for ~45% of labels, requiring "
+                P("Class imbalance is significant: ATM accounts for ~45% of labels, requiring "
                   "inverse-frequency class weights during training. WMT and MSFT skew heavily toward ATM; "
                   "NVDA and TSLA show more OTM diversity.", cls="mt-2"),
             ),
@@ -1700,7 +1700,7 @@ def _docs_eda():
 
 
 def _docs_features():
-    """Section 4: Feature engineering — two-column comparison of both pipelines."""
+    """Section 4: Feature engineering -two-column comparison of both pipelines."""
     return _doc_section("doc-feature-engineering", "Feature Engineering",
         P("Both pipelines share the same raw data sources but engineer different feature sets and targets. "
           "All features are computed at monthly decision points from daily price data and quarterly "
@@ -1721,7 +1721,7 @@ def _docs_features():
                 P("IV mean/median/skew, short/long-term IV, IV term structure, "
                   "IV rank (percentile), IV month-over-month change", cls=TextPresets.muted_sm),
                 P(Strong("Target: 3-class moneyness"), cls="mt-3"),
-                P("ATM / OTM5 / OTM10 — maturity selected post-hoc by IV-rank rule", cls=TextPresets.muted_sm),
+                P("ATM / OTM5 / OTM10 -maturity selected post-hoc by IV-rank rule", cls=TextPresets.muted_sm),
             ),
             # Right: DL pipeline
             Div(
@@ -1747,7 +1747,7 @@ def _docs_features():
                   "raw price-level features (adjusted_close, volume) leaked information and were removed. "
                   "Fundamentals then dominated: debt_to_equity, cash_ratio, gross_margin."),
                 P("After adding IV features in the walk-forward stage, implied volatility measures "
-                  "(iv_change, iv_rank, iv_mean, iv_std) consistently occupied the top 4 positions — "
+                  "(iv_change, iv_rank, iv_mean, iv_std) consistently occupied the top 4 positions -"
                   "confirming that volatility is the central signal for covered call optimization.", cls="mt-2"),
             ),
             _doc_fig("feature_importance_comparison.png", "Feature importance across model stages"),
@@ -1766,11 +1766,11 @@ def _docs_features():
 
 
 def _docs_lgbm_pipeline():
-    """Section 5: Tree-based pipeline — 3-class moneyness, RF → XGB → LGBM → walk-forward."""
+    """Section 5: Tree-based pipeline -3-class moneyness, RF → XGB → LGBM → walk-forward."""
     return _doc_section("doc-lgbm-pipeline", "Tree-Based Pipeline (3-Class)",
         P("This pipeline reformulates the problem as a simpler 3-class moneyness prediction "
           "(ATM / OTM5 / OTM10), decoupling maturity selection into a post-hoc IV-rank rule. "
-          "Three tree-based models were evaluated — Random Forest, XGBoost, and LightGBM — each "
+          "Three tree-based models were evaluated (Random Forest, XGBoost, and LightGBM), each"
           "progressively refined through Optuna tuning and walk-forward validation. "
           "LightGBM with walk-forward annual retraining emerged as the production model."),
         # Baselines
@@ -1779,14 +1779,14 @@ def _docs_lgbm_pipeline():
                 H4("Random Forest & XGBoost Baselines", style=f"color:{_IMMACULATA};"),
                 P("Both models trained on 27 features with 80/20 time-based split "
                   "(21,395 train / 7,878 test rows)."),
-                P("Random Forest: 48.5% accuracy / 0.333 macro F1. Heavily biased toward ATM — "
+                P("Random Forest: 48.5% accuracy / 0.333 macro F1. Heavily biased toward ATM -"
                   "misclassifies 1,778 OTM10 samples as ATM. Only 45 correct OTM5 predictions "
                   "out of 2,266 actual OTM5 instances.", cls="mt-2"),
                 P("XGBoost: 48.0% accuracy / 0.359 macro F1. Slightly better OTM5 recall (198 correct) "
                   "but still dominated by ATM predictions. Top features: debt_to_equity, cash_ratio, "
-                  "gross_margin — fundamentals dominate after pruning leaky price-level features.", cls="mt-2"),
+                  "gross_margin -fundamentals dominate after pruning leaky price-level features.", cls="mt-2"),
             ),
-            _doc_fig("baseline_confusion.png", "RF and XGB confusion matrices — both default to ATM"),
+            _doc_fig("baseline_confusion.png", "RF and XGB confusion matrices, both default to ATM"),
         ),
         # Optuna-tuned
         _doc_row(
@@ -1795,13 +1795,13 @@ def _docs_lgbm_pipeline():
                 P("All three models tuned via Optuna (20 trials each) with TimeSeriesSplit "
                   "cross-validation and balanced class weights to address ATM dominance."),
                 P("RF: 50.0% / 0.338 F1. XGB: 50.4% / 0.342. LGBM: 48.4% / 0.349. "
-                  "Marginal improvement — all near random-level F1 (0.333). The limitation "
+                  "Marginal improvement: allnear random-level F1 (0.333). The limitation "
                   "at this stage was the feature set, not the model architecture.", cls="mt-2"),
-                P("LGBM achieved highest macro F1 despite lowest accuracy — better minority-class "
+                P("LGBM achieved highest macro F1 despite lowest accuracy, with betterminority-class "
                   "recall. Key params: n_estimators=300, max_depth=8, lr=0.05, num_leaves=50. "
                   "Top features shifted to volatility: vol_63d, vol_21d, bb_width.", cls="mt-2"),
             ),
-            _doc_fig("improved_confusion_matrices.png", "Tuned RF, XGB, and LGBM — LGBM best minority-class balance"),
+            _doc_fig("improved_confusion_matrices.png", "Tuned RF, XGB, and LGBM. LGBM best minority-class balance"),
         ),
         # Walk-forward (production)
         _doc_row(
@@ -1813,22 +1813,22 @@ def _docs_lgbm_pipeline():
                 P("Eight IV features were added at this stage (IV mean, median, skew, short/long-term IV, "
                   "term structure, IV rank, IV change), computed from the full options board. These "
                   "immediately dominated feature importance, pushing total features from 27 to 34.", cls="mt-2"),
-                P("Overall macro F1 = 0.468 — a significant jump from the tuned model's 0.349. "
+                P("Overall macro F1 = 0.468, asignificant jump from the tuned model's 0.349. "
                   "Strong ATM recall (13,472 correct), OTM10 reasonably separated (1,850 of 4,557). "
                   "OTM5 remains the hardest class.", cls="mt-2"),
             ),
-            _doc_fig("walkforward_confusion_matrix.png", "Walk-forward confusion matrix — IV features drive F1 from 0.35 to 0.47"),
+            _doc_fig("walkforward_confusion_matrix.png", "Walk-forward confusion matrix. IV features drive F1 from 0.35 to 0.47"),
         ),
         _doc_row(
             Div(
                 H4("Yearly Performance", style=f"color:{_IMMACULATA};"),
-                P("Walk-forward F1 varies by year — peaks at 0.60 in 2019, sustained above 0.50 "
+                P("Walk-forward F1 varies by year, peakingat 0.60 in 2019, sustained above 0.50 "
                   "from 2015-2021, dips to ~0.32 in 2023 (regime-shift year with rapid rate hikes)."),
                 P("The model beats the random baseline (0.333) in most years. IV features (iv_change, "
                   "iv_rank, iv_mean, iv_std) consistently occupy the top 4 importance positions across "
                   "all walk-forward folds.", cls="mt-2"),
             ),
-            _doc_fig("walkforward_yearly_f1.png", "Macro F1 by year — consistently above random baseline"),
+            _doc_fig("walkforward_yearly_f1.png", "Macro F1 by year, consistently above random baseline"),
         ),
         # LSTM 3-class
         _doc_row(
@@ -1836,7 +1836,7 @@ def _docs_lgbm_pipeline():
                 H4("LSTM on 3-Class (Explored)", style=f"color:{_IMMACULATA};"),
                 P("A bidirectional LSTM with temporal attention was evaluated on the same 3-class target "
                   "using 60-day lookback sequences and walk-forward annual retraining."),
-                P("Overall macro F1 = 0.411. Competitive in some years (2017, 2020) but less stable — "
+                P("Overall macro F1 = 0.411. Competitive in some years (2017, 2020) but less stable -"
                   "degrades sharply in 2022-2025 where LGBM maintains consistency. LGBM selected for "
                   "production: better stability, sub-millisecond inference, simpler deployment.", cls="mt-2"),
             ),
@@ -1857,7 +1857,7 @@ def _docs_lgbm_pipeline():
 
 
 def _docs_dl_pipeline():
-    """Section 6: Deep learning pipeline — XGBoost baseline, LSTM-CNN, PatchTST on 7-class."""
+    """Section 6: Deep learning pipeline -XGBoost baseline, LSTM-CNN, PatchTST on 7-class."""
     return _doc_section("doc-dl-pipeline", "Deep Learning Pipeline (7-Class)",
         P("This pipeline tackles the full 7-class moneyness-maturity target, predicting both strike "
           "and expiry jointly. The 7 classes are: ATM_30, ATM_60, ATM_90, OTM5_30, OTM5_60_90, "
@@ -1878,33 +1878,33 @@ def _docs_dl_pipeline():
                 P("This established the fundamental difficulty of 7-class granularity and motivated "
                   "exploration of sequence-based deep learning architectures.", cls="mt-2"),
             ),
-            _doc_fig("model_comparison.png", "7-class model comparison — XGBoost baseline"),
+            _doc_fig("model_comparison.png", "7-class model comparison (XGBoost baseline)"),
         ),
         # LSTM-CNN architecture
         _doc_row(
             Div(
                 H4("LSTM-CNN + Bahdanau Attention", style=f"color:{_IMMACULATA};"),
                 P("Hybrid architecture with two parallel branches:"),
-                P(Strong("CNN Branch"), " — Two-layer 1D convolution (35→128, kernel=7) with BatchNorm "
+                P(Strong("CNN Branch"), ": Two-layer 1D convolution (35→128, kernel=7) with BatchNorm "
                   "and AdaptiveAvgPool. Captures short-range patterns: momentum shifts, vol spikes.", cls="mt-1"),
-                P(Strong("BiLSTM Branch"), " — Bidirectional LSTM (2 layers, hidden=128) with Bahdanau "
+                P(Strong("BiLSTM Branch"), ": Bidirectional LSTM (2 layers, hidden=128) with Bahdanau "
                   "temporal attention. Captures long-range dependencies: trend reversals, regime shifts.", cls="mt-1"),
-                P(Strong("Fusion"), " — CNN (128d) + LSTM attention (256d) concatenated → LayerNorm → "
+                P(Strong("Fusion"), ": CNN (128d) + LSTM attention (256d) concatenated → LayerNorm → "
                   "FC(384→192→7). Combined local and global temporal context.", cls="mt-1"),
                 P("Trained with AdamW, class-weighted cross-entropy loss, early stopping on "
                   "validation macro F1. Three training variants with different regularization.", cls="mt-2"),
             ),
-            _doc_fig("lstm_training_curves.png", "LSTM-CNN training curves — early divergence of train/val loss"),
+            _doc_fig("lstm_training_curves.png", "LSTM-CNN training curves showing early divergence of train/val loss"),
         ),
         # LSTM-CNN results
         _doc_row(
             Div(
                 H4("LSTM-CNN Results", style=f"color:{_IMMACULATA};"),
                 P("20 experiment runs tracked in MLflow across three variants:"),
-                P(Strong("Regularised"), " (dropout=0.5, weight_decay=0.01): 38.1% accuracy / 0.110 F1 — "
+                P(Strong("Regularised"), " (dropout=0.5, weight_decay=0.01): 38.1% accuracy / 0.110 F1 -"
                   "highest test F1 of any deep learning model. Heavy regularization improved "
                   "generalization.", cls="mt-1"),
-                P(Strong("Best"), " (dropout=0.155): 24.5% accuracy / 0.091 F1 — lower dropout "
+                P(Strong("Best"), " (dropout=0.155): 24.5% accuracy / 0.091 F1. Lower dropout "
                   "led to overfitting. Training F1 reached 0.819 while validation peaked at 0.206.", cls="mt-1"),
                 P("Four of seven classes received F1 scores of zero across most models, indicating "
                   "a fundamental failure to distinguish minority strategy buckets. The OTM10_60_90 class "
@@ -1920,19 +1920,19 @@ def _docs_dl_pipeline():
                   "4 encoder layers, embedding dim=64, 2 attention heads. Walk-forward annual retraining."),
                 P("Base: 14.4% accuracy / 0.086 F1. Pretrained + FRED macro variant: no improvement. "
                   "Transformers require substantially more data than the ~1,300 available monthly "
-                  "decision points — self-attention overfits to spurious temporal correlations.", cls="mt-2"),
+                  "decision points -self-attention overfits to spurious temporal correlations.", cls="mt-2"),
             ),
             _doc_fig("patchtst_walkforward_confusion_matrix.png", "PatchTST walk-forward confusion matrix"),
         ),
         _doc_row(
             Div(
                 H4("PatchTST Yearly Stability", style=f"color:{_IMMACULATA};"),
-                P("F1 by year shows high variance — oscillating between near-random and moderately "
+                P("F1 by year shows high variance, oscillating between near-random and moderately "
                   "above baseline. The model cannot maintain stability across different market regimes."),
                 P("Key finding from the report: increasing model complexity did not improve performance. "
                   "The primary limitation is data volume and regime sensitivity, not model capacity.", cls="mt-2"),
             ),
-            _doc_fig("patchtst_walkforward_yearly_f1.png", "PatchTST F1 by year — high variance, unstable"),
+            _doc_fig("patchtst_walkforward_yearly_f1.png", "PatchTST F1 by year, high variance and unstable"),
         ),
         # Deployment
         Div(
@@ -1950,23 +1950,23 @@ def _docs_dl_pipeline():
 
 
 def _docs_strategy():
-    """Section 7: Post-inference strategy — scoring engine, allocation, backtesting."""
+    """Section 7: Post-inference strategy -scoring engine, allocation, backtesting."""
     return _doc_section("doc-strategy", "Strategy & Post-Inference",
         P("The model predicts a moneyness bucket, but a prediction alone is not actionable. The deployed "
           "system adds a scoring and allocation layer between model output and the portfolio manager's "
-          "decision. This layer — developed post-capstone — ranks the 10-ticker universe each month, "
+          "decision. This layer, developed post-capstone, ranks the 10-ticker universe each month, "
           "evaluates each position against multiple scoring criteria, and presents the results alongside "
           "Claude AI analysis as a decision-support diagnostic."),
         # Scoring engine
         Div(
             H4("Composable Scoring Engine", style=f"color:{_IMMACULATA};"),
             P("Each ticker receives a composite score from three weighted components:"),
-            P(Strong("1. Model Confidence"), " — the LGBM prediction probability for the chosen bucket. "
+            P(Strong("1. Model Confidence"), ": the LGBM prediction probability for the chosen bucket. "
               "Higher confidence means the model sees a clearer signal for this ticker-month.", cls="mt-1"),
-            P(Strong("2. Transaction Cost Score"), " — computed from the bid-ask spread of matching "
+            P(Strong("2. Transaction Cost Score"), ": computed from the bid-ask spread of matching "
               "options contracts. Tighter spreads = lower cost = higher score. A turnover penalty "
               "doubles the cost if the bucket changed from the prior month, discouraging churn.", cls="mt-1"),
-            P(Strong("3. Delta-Hedged Return Score"), " — monthly approximation inspired by "
+            P(Strong("3. Delta-Hedged Return Score"), ": monthly approximation inspired by "
               "Bali et al. (2021). Isolates the volatility premium by removing directional exposure: "
               "DH_gain = option_pnl - delta * stock_move - financing_cost. Higher values indicate "
               "more pure vol premium available.", cls="mt-1"),
@@ -1984,7 +1984,7 @@ def _docs_strategy():
                     P("Confidence 30% / TC 50% / Delta-Hedge 20%", cls=TextPresets.muted_sm),
                     P("7 positions, equal weight", cls=TextPresets.muted_sm),
                     P("Spread capital wide, prioritize low-cost trades. Run with both LGBM and LSTM predictions.", cls="mt-1"),
-                    # Balanced and Aggressive removed — Conservative is the production preset
+                    # Balanced and Aggressive removed -Conservative is the production preset
                 ),
                 Div(
                     P(Strong("Argmax (No Scoring)"), cls="mt-1"),
@@ -1995,12 +1995,12 @@ def _docs_strategy():
                     P("Probability-weighted expected return.", cls="mt-1"),
                     P(Strong("Baseline (No Model)"), cls="mt-3"),
                     P("Always sell 10% OTM short-dated on all tickers, equal weight.", cls=TextPresets.muted_sm),
-                    P("No model, no scoring — pure benchmark.", cls="mt-1"),
+                    P("No model, no scoring. Purebenchmark.", cls="mt-1"),
                 ),
             ),
             style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
-        # Backtesting results — these figures cover Argmax, Risk-Adjusted, Baseline, and Oracle only.
+        # Backtesting results -these figures cover Argmax, Risk-Adjusted, Baseline, and Oracle only.
         # The 3 scoring presets (Conservative, Balanced, Aggressive) are computed live in the
         # Strategy tab of the trading dashboard and are not included in these static figures.
         _doc_row(
@@ -2009,10 +2009,10 @@ def _docs_strategy():
                 P("Annual returns for the non-scored strategies: Argmax (model top pick), "
                   "Risk-Adjusted (probability-weighted expected return), and OTM10 Baseline "
                   "(no model). Oracle (perfect foresight) included as an upper bound."),
-                P("The scored presets (Conservative, Balanced, Aggressive) are not shown here — "
+                P("The scored presets (Conservative, Balanced, Aggressive) are not shown here -"
                   "their results are computed live in the Strategy tab of the trading dashboard.", cls="mt-2"),
             ),
-            _doc_fig("annual_returns_comparison.png", "Annual returns — Argmax, Risk-Adjusted, Baseline, Oracle"),
+            _doc_fig("annual_returns_comparison.png", "Annual returns: Argmax, Risk-Adjusted, Baseline, Oracle"),
         ),
         _doc_row(
             Div(
@@ -2023,7 +2023,7 @@ def _docs_strategy():
                 P("Risk-Adjusted achieves the best Sharpe ratio among these strategies. "
                   "The three scoring presets are available in the live dashboard.", cls="mt-2"),
             ),
-            _doc_fig("equity_curves.png", "Equity curves — Argmax, Risk-Adjusted, Baseline"),
+            _doc_fig("equity_curves.png", "Equity curves: Argmax, Risk-Adjusted, Baseline"),
         ),
     )
 
@@ -2081,15 +2081,15 @@ def _docs_results():
             H4("Key Findings", style=f"color:{_IMMACULATA};"),
             P("All models outperform random baseline, confirming meaningful predictive signal in the "
               "feature set. The best 7-class model (LSTM-CNN regularised) achieved 34.0% test accuracy "
-              "— a 2.4x improvement over random selection (14.3%)."),
+              "- a 2.4x improvement over random selection (14.3%)."),
             P("Performance is fundamentally constrained by distribution shift: the OTM10_60_90 class "
               "increased from 1.25% of training data to 53.15% of the 2024 test set. Increasing model "
-              "complexity did not help — the limitation is data volume and regime sensitivity, "
+              "complexity did not help. The limitation is data volume and regime sensitivity, "
               "not architecture.", cls="mt-2"),
             P("Transformer-based models underperformed simpler tree-based methods, confirming that "
               "data-hungry architectures are not appropriate for this dataset size. Macroeconomic "
               "features (FRED) did not contribute meaningfully; stock-level technical and fundamental "
-              "features — especially implied volatility measures — proved most informative.", cls="mt-2"),
+              "features -especially implied volatility measures -proved most informative.", cls="mt-2"),
             style=f"padding:1rem 0; border-bottom:1px solid {_TORERO}40;",
         ),
         # Decision-support implications
@@ -2148,7 +2148,7 @@ _DASHBOARD_SECTIONS = [
     ("dash-mlflow", "MLflow Tracking"),
 ]
 
-# Combined for routing — sidebar renders the divider separately
+# Combined for routing -sidebar renders the divider separately
 DOC_SECTIONS = _REPORT_SECTIONS + _DASHBOARD_SECTIONS
 
 _DOC_RENDERERS = {
