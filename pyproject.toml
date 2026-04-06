@@ -16,6 +16,8 @@ dependencies = [
     "pydantic",
     "torch",
     "langgraph",
+    "anthropic",
+    "python-dotenv",
 ]
 
 [tool.setuptools.packages.find]

@@ -311,17 +311,14 @@ async def get():
 
 @rt("/backtest_call")
 @log_call(logger)
-async def post(year: str = "all", budget: str = "100000"):
-    """Handle backtest request from the backtesting sidebar.
-
-    Runs backtests for all 3 presets + baseline for the selected year.
-    """
+async def post(year: str = "all", budget: str = "100000", mode: str = "absolute"):
+    """Handle backtest request from the backtesting sidebar."""
     try:
         budget_val = float(budget)
         result = await handle_backtest_call(year=year, budget=budget_val)
         if "error" in result:
             return Div(P(f"Error: {result['error']}", cls="uk-text-danger"))
-        return backtest_results_card(result)
+        return backtest_results_card(result, mode=mode)
     except Exception as e:
         logger.error(f"Error on backtest_call: {e}")
         return Div(P("Backtest request failed.", cls="uk-text-danger"))

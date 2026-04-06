@@ -17,7 +17,9 @@ from src.inference.chart import build_candlestick_data
 from src.inference.model import compute_model_metrics, get_lgbm_experiment_info
 from src.inference.backtesting import run_backtest_all
 from src.inference.mlflow_reader import load_experiments
-from src.inference.claude_analysis import analyze_predictions
+from src.inference.scoring_graph import invoke_scoring_graph
+from src.inference.context_graph import invoke_context_graph
+from src.inference.analysis_graph import invoke_analysis_graph
 
 logger = create_logger("inference")
 
@@ -133,32 +135,86 @@ async def mlflow_experiments_endpoint():
         return {"error": str(e)}
 
 
-@app.get("/claude_analysis")
-async def claude_analysis_endpoint(ticker: str = "", date: str = ""):
-    """Run Claude analysis on both model predictions for a given ticker/date.
+@app.get("/scoring")
+async def scoring_endpoint(ticker: str = "", date: str = ""):
+    """Run scoring graph — all 6 strategies for a given date.
 
-    Called separately from inference — the UI fires this after model
-    predictions have already rendered. Receives ticker+date, re-fetches
-    predictions from feature stores, and sends to Claude for synthesis.
+    Args:
+        ticker: Stock symbol (for context).
+        date: Date string (YYYY-MM-DD).
+
+    Returns:
+        Dict with all strategy results.
+    """
+    try:
+        return await invoke_scoring_graph(ticker=ticker, date=date)
+    except Exception as e:
+        logger.error(f"Error on /scoring: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/context")
+async def context_endpoint(ticker: str = "", date: str = ""):
+    """Run context graph — market regime, features, track record.
 
     Args:
         ticker: Stock symbol.
         date: Date string (YYYY-MM-DD).
 
     Returns:
-        Dict with 'analysis' text or 'error'.
+        Dict with price, feature, and track record context.
+    """
+    try:
+        return await invoke_context_graph(ticker=ticker, date=date)
+    except Exception as e:
+        logger.error(f"Error on /context: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/claude_analysis")
+async def claude_analysis_endpoint(ticker: str = "", date: str = ""):
+    """Run full analysis pipeline — scoring + context + Claude synthesis.
+
+    Invokes scoring and context graphs, then feeds everything into
+    the Claude analysis graph for a recommended action report.
+
+    Args:
+        ticker: Stock symbol.
+        date: Date string (YYYY-MM-DD).
+
+    Returns:
+        Dict with 'analysis' text, 'scoring', and 'context'.
     """
     try:
         from src.inference.model import predict_bucket as lgbm_predict
         from src.inference.lstm_model import predict_bucket as lstm_predict
 
+        # Re-fetch inference results (cheap row lookups)
         lgbm = lgbm_predict(ticker, date)
         lstm = lstm_predict(ticker, date)
+        inference = {
+            "model_bucket": lgbm.get("model_bucket", "?"),
+            "model_confidence": lgbm.get("model_confidence", 0),
+            "lstm_prediction": lstm.get("predicted_class", "?"),
+            "lstm_confidence": lstm.get("confidence", 0),
+        }
 
-        result = await analyze_predictions(
-            ticker=ticker, date=date, lgbm=lgbm, lstm=lstm,
+        # Run scoring and context graphs
+        scoring = await invoke_scoring_graph(ticker=ticker, date=date)
+        context = await invoke_context_graph(ticker=ticker, date=date)
+
+        # Run Claude analysis graph
+        analysis = await invoke_analysis_graph(
+            ticker=ticker, date=date,
+            inference=inference, scoring=scoring, context=context,
         )
-        return result
+
+        return {
+            "analysis": analysis.get("analysis", ""),
+            "source": analysis.get("source", "unknown"),
+            "scoring": scoring,
+            "context": context,
+        }
     except Exception as e:
         logger.error(f"Error on /claude_analysis: {e}")
         return {"error": str(e)}

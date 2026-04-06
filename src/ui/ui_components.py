@@ -309,29 +309,115 @@ def _claude_analysis_panel():
 
 
 def claude_analysis_card(data: dict):
-    """Render Claude's analysis of both model predictions.
+    """Render full analysis: scoring table, context summary, and Claude report.
 
     Args:
-        data: Dict with 'analysis' text or 'error'.
+        data: Dict with 'analysis', 'scoring', 'context', or 'error'.
 
     Returns:
-        Card Div with analysis text.
+        Div with scoring card, context card, and analysis card.
     """
     try:
         if "error" in data:
-            content = P(f"Analysis unavailable: {data['error']}",
-                        cls=TextPresets.muted_sm, style="font-style:italic;")
-        else:
-            content = P(data.get("analysis", "No analysis returned."),
-                        style="line-height:1.6;")
+            return Card(
+                P(f"Analysis unavailable: {data['error']}",
+                  cls=TextPresets.muted_sm, style="font-style:italic;"),
+                header=Div(
+                    UkIcon("brain", height=20, width=20),
+                    H4(" Claude Analysis", style=f"color:{_FOUNDERS}; display:inline;"),
+                    style="display:flex; align-items:center; gap:0.5rem;",
+                ),
+            )
 
-        return Card(
-            content,
+        # ── Scoring table ──
+        scoring = data.get("scoring", {})
+        scoring_rows = []
+        for key, label in [("baseline", "Baseline (OTM10)"), ("argmax", "Argmax"),
+                           ("risk_adjusted", "Risk-Adjusted")]:
+            s = scoring.get(key, {})
+            ret = s.get("return", 0)
+            scoring_rows.append(Tr(Td(label), Td(f"{ret:.4%}"), Td(str(s.get("n_tickers", "—")))))
+        for preset in ["conservative", "balanced", "aggressive"]:
+            s = scoring.get("presets", {}).get(preset, {})
+            ret = s.get("return", 0)
+            scoring_rows.append(Tr(Td(preset.title()), Td(f"{ret:.4%}"), Td(str(s.get("n_positions", "—")))))
+
+        scoring_card = Card(
+            Table(
+                Thead(Tr(Th("Strategy"), Th("Return"), Th("Positions"))),
+                Tbody(*scoring_rows),
+                cls="uk-table uk-table-small uk-table-divider",
+            ),
+            header=Div(
+                UkIcon("bar-chart-2", height=18, width=18),
+                H4(" Strategy Scoring", style=f"color:{_FOUNDERS}; display:inline;"),
+                style="display:flex; align-items:center; gap:0.5rem;",
+            ),
+        )
+
+        # ── Context summary ──
+        ctx = data.get("context", {})
+        price = ctx.get("price", {})
+        track = ctx.get("track_record", {})
+        features = ctx.get("features", {})
+        iv = features.get("iv", {})
+
+        context_items = []
+        if price and "error" not in price:
+            context_items.extend([
+                Tr(Td("Trend"), Td(f"{price.get('trend', '?').title()}")),
+                Tr(Td("Vol Regime"), Td(f"{price.get('vol_regime', '?').replace('_', ' ').title()}")),
+                Tr(Td("20d Vol"), Td(f"{price.get('vol_20d', 0):.1%}")),
+                Tr(Td("60d Return"), Td(f"{price.get('period_return', 0):.1%}")),
+            ])
+        if iv:
+            context_items.append(Tr(Td("IV Rank"), Td(f"{iv.get('iv_rank', '?')}")))
+        if track and "error" not in track:
+            context_items.extend([
+                Tr(Td("Ticker Accuracy"), Td(f"{track.get('overall_accuracy', 0):.1%}")),
+                Tr(Td("Recent 12m"), Td(f"{track.get('recent_12m_accuracy', 0):.1%}")),
+            ])
+
+        context_card = Card(
+            Table(
+                Thead(Tr(Th("Metric"), Th("Value"))),
+                Tbody(*context_items),
+                cls="uk-table uk-table-small uk-table-divider",
+            ) if context_items else P("Context unavailable.", cls=TextPresets.muted_sm),
+            header=Div(
+                UkIcon("activity", height=18, width=18),
+                H4(" Market Context", style=f"color:{_FOUNDERS}; display:inline;"),
+                style="display:flex; align-items:center; gap:0.5rem;",
+            ),
+        )
+
+        # ── Analysis text ──
+        analysis_text = data.get("analysis", "No analysis returned.")
+        source = data.get("source", "unknown")
+        source_badge = Span(
+            f"  [{source}]",
+            style=f"font-size:0.7rem; color:{_TORERO}; font-weight:400;",
+        ) if source != "api" else ""
+
+        analysis_card = Card(
+            P(analysis_text, style="line-height:1.6; white-space:pre-wrap;"),
             header=Div(
                 UkIcon("brain", height=20, width=20),
                 H4(" Claude Analysis", style=f"color:{_FOUNDERS}; display:inline;"),
+                source_badge,
                 style="display:flex; align-items:center; gap:0.5rem;",
             ),
+        )
+
+        # Layout: scoring + context side by side, analysis full width below
+        return Div(
+            Div(
+                Div(scoring_card, style="flex:1;"),
+                Div(context_card, style="flex:1;"),
+                style="display:flex; gap:1rem;",
+            ),
+            analysis_card,
+            style="display:flex; flex-direction:column; gap:1rem;",
         )
     except Exception:
         return _fallback("Claude analysis")
@@ -616,19 +702,29 @@ def _backtest_sidebar():
         fh.Option(str(y), value=str(y)) for y in range(2008, 2026)
     ]
     return Card(
-        # Year dropdown (native select — MonsterUI uk-select doesn't reliably show selected on load)
         Label("Time Window"),
         fh.Select(*year_options, name="year", id="backtest-year", cls="uk-select"),
-        # Budget commented out — percentage-based metrics are invariant to budget scale
-        # Label("Budget ($)", cls="mt-3"),
-        # Input(type="number", name="budget", id="backtest-budget",
-        #       value="100000", min="10000", step="10000"),
-        # Run button
+        # View mode toggle
+        Label("View", cls="mt-3"),
+        Div(
+            Label(
+                Input(type="radio", name="mode", value="absolute", checked=True,
+                      cls="uk-radio", style="margin-right:0.3rem;"),
+                " Absolute",
+                style="margin-right:1rem;",
+            ),
+            Label(
+                Input(type="radio", name="mode", value="delta",
+                      cls="uk-radio", style="margin-right:0.3rem;"),
+                " vs Baseline",
+            ),
+            style="display:flex; margin-top:0.25rem;",
+        ),
         Button("Run Backtest",
                cls="w-full mt-4",
                style=f"background-color:{_IMMACULATA}; color:white;",
                hx_post="/backtest_call",
-               hx_include="#backtest-year",
+               hx_include="#backtest-year, [name='mode']:checked",
                hx_target="#backtest-results",
                hx_swap="innerHTML",
                hx_indicator="#backtest-spinner"),
@@ -652,11 +748,12 @@ def _backtest_results_panel():
     )
 
 
-def backtest_results_card(data: dict):
-    """Render dual-model backtest results: LGBM and LSTM strategies.
+def backtest_results_card(data: dict, mode: str = "absolute"):
+    """Render dual-model backtest results.
 
     Args:
         data: Combined backtest report from run_backtest_all().
+        mode: 'absolute' shows raw metrics, 'delta' shows difference vs baseline.
 
     Returns:
         Div with two strategy comparison tables.
@@ -668,45 +765,58 @@ def backtest_results_card(data: dict):
         lgbm = data.get("lgbm", {})
         lstm = data.get("lstm", {})
         baseline_m = data.get("baseline", {}).get("metrics", {})
+        is_delta = mode == "delta"
 
         def fmt_pct(v): return f"{v:.1%}"
         def fmt_ratio(v): return f"{v:.2f}"
+        def fmt_delta_pct(v): return f"{v:+.1%}"
+        def fmt_delta_ratio(v): return f"{v:+.2f}"
 
         metric_defs = [
-            ("Ann. Return", "annualized_return", fmt_pct,
+            ("Ann. Return", "annualized_return", fmt_pct, fmt_delta_pct,
              "Total return converted to a yearly rate."),
-            ("Sharpe", "sharpe_ratio", fmt_ratio,
+            ("Sharpe", "sharpe_ratio", fmt_ratio, fmt_delta_ratio,
              "Return per unit of risk. Above 1 is good, above 2 is very good."),
-            ("Max Drawdown", "max_drawdown", fmt_pct,
+            ("Max Drawdown", "max_drawdown", fmt_pct, fmt_delta_pct,
              "Biggest peak-to-trough drop before recovery."),
-            ("Hit Rate", "hit_rate", fmt_pct,
+            ("Hit Rate", "hit_rate", fmt_pct, fmt_delta_pct,
              "Percentage of months with a positive return."),
-            ("Avg P / Avg L", "avg_p_l", fmt_ratio,
+            ("Avg P / Avg L", "avg_p_l", fmt_ratio, fmt_delta_ratio,
              "Average win divided by average loss."),
         ]
 
         def _strat_table(model_data: dict, model_label: str):
-            """Build a strategy table for one model."""
             am = model_data.get("argmax", {}).get("metrics", {})
             ra = model_data.get("risk_adjusted", {}).get("metrics", {})
             cm = model_data.get("conservative", {}).get("metrics", {})
 
             rows = []
-            for label, key, fmt, tip in metric_defs:
-                rows.append(Tr(
-                    Td(Span(label, _tip(tip))),
-                    Td(fmt(baseline_m.get(key, 0))),
-                    Td(fmt(am.get(key, 0))),
-                    Td(fmt(ra.get(key, 0))),
-                    Td(fmt(cm.get(key, 0))),
-                ))
+            for label, key, fmt_abs, fmt_d, tip in metric_defs:
+                bv = baseline_m.get(key, 0)
+                if is_delta:
+                    rows.append(Tr(
+                        Td(Span(label, _tip(tip))),
+                        Td("—"),
+                        Td(fmt_d(am.get(key, 0) - bv)),
+                        Td(fmt_d(ra.get(key, 0) - bv)),
+                        Td(fmt_d(cm.get(key, 0) - bv)),
+                    ))
+                else:
+                    rows.append(Tr(
+                        Td(Span(label, _tip(tip))),
+                        Td(fmt_abs(bv)),
+                        Td(fmt_abs(am.get(key, 0))),
+                        Td(fmt_abs(ra.get(key, 0))),
+                        Td(fmt_abs(cm.get(key, 0))),
+                    ))
 
+            baseline_header = "Baseline" if not is_delta else "Baseline (ref)"
             return Div(
                 H4(model_label, style=f"color:{_IMMACULATA}; font-size:1rem; margin-bottom:0.5rem;"),
                 Table(
                     Thead(Tr(
                         Th("Metric"),
-                        Th(Span("Baseline", _tip("OTM10 short-dated on all tickers. No model."))),
+                        Th(Span(baseline_header, _tip("OTM10 short-dated on all tickers. No model."))),
                         Th(Span("Argmax", _tip("Model's top pick per ticker, equal weight."))),
                         Th(Span("Risk-Adj", _tip("P(bucket) x E[return], expanding averages."))),
                         Th(Span("Conservative", _tip("Scored: 7 positions, low-cost priority."))),
@@ -718,10 +828,11 @@ def backtest_results_card(data: dict):
 
         period_label = f"Year: {year}" if year != "all" else "All Years"
         period_detail = f"{date_range.get('start', '?')} to {date_range.get('end', '?')}"
+        mode_label = "Showing difference vs baseline" if is_delta else "Showing absolute metrics"
 
         return Div(
             Card(
-                P(f"{period_label} ({period_detail}) | {n_months} months",
+                P(f"{period_label} ({period_detail}) | {n_months} months — {mode_label}",
                   cls=TextPresets.muted_sm),
                 DividerLine(),
                 _strat_table(lgbm, "LGBM 3-Class Strategies"),
