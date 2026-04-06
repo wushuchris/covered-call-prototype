@@ -238,7 +238,7 @@ def _inference_sidebar():
             cls="mt-2",
         ),
         # compute button — posts to /inference_call, swaps results panel
-        Button("Compute Inference",
+        Button("Run Diagnostic",
                cls="w-full mt-4",
                style=f"background-color:{_IMMACULATA}; color:white;",
                hx_post="/inference_call",
@@ -1900,7 +1900,7 @@ def _docs_results():
 def _docs_navbar(sections):
     """Top navigation bar for docs with PDF download and Trader link."""
     return NavBar(
-        A("Trader", href="/trading"),
+        A("Advisor", href="/trading"),
         A(DivLAligned(UkIcon("download", height=16, width=16), Span("PDF Report", style="margin-left:0.3rem;")),
           href="/static/AAI-590-G6-Capstone-Report.pdf", download=True,
           style=f"color:{_IMMACULATA}; text-decoration:none;"),
