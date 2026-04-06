@@ -346,20 +346,31 @@ def claude_analysis_card(data: dict):
         def _ret(d):
             return f"{d.get('return', 0):.4%}" if d else "N/A"
 
+        _stips = {
+            "baseline": "Always sell 10% OTM short-dated calls. No model - pure benchmark.",
+            "argmax": "Model's single highest-probability pick. Simple and transparent.",
+            "risk_adjusted": "Picks the bucket that maximizes probability times expected return.",
+            "conservative": "Scored strategy: spreads across 7 positions, prioritizes low-cost trades.",
+        }
         scoring_rows = [
-            Tr(Td("Baseline (OTM10)"), Td(_ret(baseline_s)), Td(_ret(baseline_s))),
+            Tr(Td(Span("Baseline (OTM10)", _tip(_stips["baseline"]))),
+               Td(_ret(baseline_s)), Td(_ret(baseline_s))),
         ]
         for key, label in [("argmax", "Argmax"), ("risk_adjusted", "Risk-Adjusted"),
                            ("conservative", "Conservative")]:
             scoring_rows.append(Tr(
-                Td(label),
+                Td(Span(label, _tip(_stips[key]))),
                 Td(_ret(lstm_s.get(key, {}))),
                 Td(_ret(lgbm_s.get(key, {}))),
             ))
 
         scoring_card = Card(
             Table(
-                Thead(Tr(Th("Strategy"), Th("LSTM-CNN"), Th("LGBM"))),
+                Thead(Tr(
+                    Th("Strategy"),
+                    Th(Span("LSTM-CNN", _tip("Return using the LSTM-CNN 7-class model's predictions."))),
+                    Th(Span("LGBM", _tip("Return using the LGBM 3-class model's predictions."))),
+                )),
                 Tbody(*scoring_rows),
                 cls="uk-table uk-table-small uk-table-divider",
             ),
