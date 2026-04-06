@@ -84,10 +84,10 @@ def launcher_screen():
             DivCentered(
                 Img(src="/static/usd_logo.png", alt="USD Logo",
                     style="max-width:220px; margin-bottom:1.5rem;"),
-                H2("USD Trader", style=f"color:{_FOUNDERS};"),
+                H2("USD Strategy Advisor", style=f"color:{_FOUNDERS};"),
                 P("in coordination with Validex Growth Investors",
                   style=f"color:{_IMMACULATA}; font-style:italic; margin-top:-0.25rem;"),
-                P("Machine Learning-Driven Covered Call Optimization",
+                P("ML-Driven Covered Call Decision Support",
                   cls=TextPresets.muted_sm),
                 Button("Enter",
                        hx_get="/trading", hx_target="#main", hx_swap="innerHTML",
@@ -135,12 +135,12 @@ def trading_screen():
 def _navbar():
     """Top navigation bar with scrollspy anchors and home icon."""
     return NavBar(
-        A("Historical Inference", href="#daily-inference"),
+        A("Strategy Diagnostic", href="#daily-inference"),
         A("Docs", href="/docs"),
         brand=A(
             DivLAligned(
                 UkIcon("brain-circuit", height=20, width=20),
-                H3("USD Trader", style=f"color:{_FOUNDERS}; margin:0;"),
+                H3("USD Strategy Advisor", style=f"color:{_FOUNDERS}; margin:0;"),
                 Span("| Validex", style=f"color:{_IMMACULATA}; font-size:0.85rem; margin-left:0.5rem;"),
             ),
             href="/",
@@ -181,8 +181,9 @@ def _daily_inference_section():
         Section Div.
     """
     return Section(
-        H3("Historical Inference", style=f"color:{_FOUNDERS};"),
-        P("Run a historical model prediction for a given ticker and date.", cls=TextPresets.muted_sm),
+        H3("Strategy Diagnostic", style=f"color:{_FOUNDERS};"),
+        P("Decision-support diagnostic — evaluate model predictions, strategy scoring, and market context for covered call selection.",
+          cls=TextPresets.muted_sm),
         DividerLine(),
         Grid(
             # results panel — left (spans 4 of 7 cols)
@@ -281,7 +282,7 @@ def _inference_results_panel():
                 ),
                 style="display:flex; gap:1rem;",
             ),
-            header=H4("Inference Results", style=f"color:{_FOUNDERS};"),
+            header=H4("Diagnostic Results", style=f"color:{_FOUNDERS};"),
         ),
         id="inference-results",
     )
@@ -523,7 +524,7 @@ def inference_results_card(data: dict):
                     Div(chart_el, style="flex:3; min-height:200px;"),
                     style="display:flex; gap:1rem;",
                 ),
-                header=H4(f"Inference — {data.get('ticker', '?')} @ {data.get('date', '?')}",
+                header=H4(f"Diagnostic — {data.get('ticker', '?')} @ {data.get('date', '?')}",
                            style=f"color:{_FOUNDERS};"),
             ),
             # OOB swap replaces the Claude analysis panel with loading → auto-fetch
@@ -670,7 +671,7 @@ def batch_results_card(data: dict):
                     ),
                     style="display:flex; gap:1rem;",
                 ),
-                header=H4(f"Batch Inference — {summary.get('date', '?')} ({summary.get('n_tickers', 0)} tickers)",
+                header=H4(f"Batch Diagnostic — {summary.get('date', '?')} ({summary.get('n_tickers', 0)} tickers)",
                           style=f"color:{_FOUNDERS};"),
             ),
             # Detail modal with per-ticker rows + chart icons
@@ -1906,7 +1907,7 @@ def _docs_navbar(sections):
         brand=A(
             DivLAligned(
                 UkIcon("book-open", height=20, width=20),
-                H3("USD Trader", style=f"color:{_FOUNDERS}; margin:0;"),
+                H3("USD Strategy Advisor", style=f"color:{_FOUNDERS}; margin:0;"),
                 Span("| Docs", style=f"color:{_IMMACULATA}; font-size:0.85rem; margin-left:0.5rem;"),
             ),
             href="/",
