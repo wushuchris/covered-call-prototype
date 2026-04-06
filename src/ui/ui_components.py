@@ -87,7 +87,7 @@ def launcher_screen():
                 H2("USD Strategy Advisor", style=f"color:{_FOUNDERS};"),
                 P("in coordination with Validex Growth Investors",
                   style=f"color:{_IMMACULATA}; font-style:italic; margin-top:-0.25rem;"),
-                P("ML-Driven Covered Call Decision Support",
+                P("Machine Learning-Driven Covered Call Optimization",
                   cls=TextPresets.muted_sm),
                 Button("Enter",
                        hx_get="/trading", hx_target="#main", hx_swap="innerHTML",
@@ -338,7 +338,7 @@ def claude_analysis_card(data: dict):
             s = scoring.get(key, {})
             ret = s.get("return", 0)
             scoring_rows.append(Tr(Td(label), Td(f"{ret:.4%}"), Td(str(s.get("n_tickers", "—")))))
-        for preset in ["conservative", "balanced", "aggressive"]:
+        for preset in ["conservative"]:  # balanced, aggressive removed per team decision
             s = scoring.get("presets", {}).get(preset, {})
             ret = s.get("return", 0)
             scoring_rows.append(Tr(Td(preset.title()), Td(f"{ret:.4%}"), Td(str(s.get("n_positions", "—")))))
