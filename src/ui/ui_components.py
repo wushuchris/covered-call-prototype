@@ -67,6 +67,208 @@ def _tip(text: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TUTORIAL OVERLAY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# transparent walkthrough overlay that appears on first entry into the trading
+# screen. purely htmx-driven: each "Next" swaps the overlay content, "Skip"
+# or the final "Got it" removes the overlay entirely.
+
+_TUTORIAL_STEPS = [
+    {
+        "title": "Welcome to the Strategy Advisor",
+        "icon": "brain-circuit",
+        "body": (
+            "This is a decision-support diagnostic, not an automated trading tool. "
+            "It uses two ML models to predict which covered call moneyness bucket "
+            "(ATM, 5% OTM, or 10% OTM) may perform best each month for large-cap "
+            "U.S. stocks."
+        ),
+        "hint": "Think of it as a second opinion backed by data.",
+    },
+    {
+        "title": "Set Your Parameters",
+        "icon": "sliders-horizontal",
+        "body": (
+            "Use the sidebar on the right to pick a date and ticker. "
+            "'All Stocks' runs all 10 tickers at once for a portfolio view. "
+            "Then hit 'Run Diagnostic' to generate predictions."
+        ),
+        "hint": "Dates before Jan 2026 use historical data. Today's date fetches live market data.",
+    },
+    {
+        "title": "Read the Results",
+        "icon": "bar-chart-3",
+        "body": (
+            "Two models run in parallel: a LightGBM classifier and an LSTM-CNN "
+            "deep learning model. You will see each model's predicted bucket, its "
+            "confidence level, and a candlestick price chart for context."
+        ),
+        "hint": "Higher confidence does not always mean better. Check the scoring table too.",
+    },
+    {
+        "title": "AI-Powered Analysis",
+        "icon": "sparkles",
+        "body": (
+            "After predictions load, Claude AI automatically analyzes everything: "
+            "strategy scoring across four approaches, current market regime, and the "
+            "model's track record for that ticker. It produces a recommended action "
+            "with rationale and risk warnings."
+        ),
+        "hint": "The analysis loads a few seconds after predictions. Look for the card below the results.",
+    },
+    {
+        "title": "You're Ready",
+        "icon": "rocket",
+        "body": (
+            "Hover over any (?) icon for quick explanations of technical terms. "
+            "The Docs page has the full methodology, model details, and research "
+            "behind this tool."
+        ),
+        "hint": "Tip: start with 'All Stocks' on today's date for the full portfolio view.",
+    },
+]
+
+
+def tutorial_overlay(step: int = 0):
+    """Render the tutorial overlay for a given step.
+
+    Semi-transparent backdrop with a frosted-glass card. htmx swaps the
+    entire overlay div on Next/Skip. Final step or Skip swaps to an empty
+    Div, removing the overlay.
+
+    Args:
+        step: Current tutorial step index (0-based).
+
+    Returns:
+        Div with id='tutorial-overlay'.
+    """
+    if step < 0 or step >= len(_TUTORIAL_STEPS):
+        # done - return empty div to remove overlay
+        return Div(id="tutorial-overlay")
+
+    s = _TUTORIAL_STEPS[step]
+    total = len(_TUTORIAL_STEPS)
+    is_last = step == total - 1
+
+    # progress dots
+    dots = Div(
+        *[
+            Span(
+                style=(
+                    f"width:8px; height:8px; border-radius:50%; display:inline-block; "
+                    f"margin:0 3px; "
+                    f"background:{'white' if i == step else 'rgba(255,255,255,0.35)'};"
+                )
+            )
+            for i in range(total)
+        ],
+        style="text-align:center; margin-bottom:1rem;",
+    )
+
+    # nav buttons
+    nav_buttons = []
+    if step > 0:
+        nav_buttons.append(
+            Button(
+                UkIcon("arrow-left", height=14, width=14), " Back",
+                hx_get=f"/tutorial?step={step - 1}",
+                hx_target="#tutorial-overlay",
+                hx_swap="outerHTML",
+                style="background:transparent; color:white; border:1px solid rgba(255,255,255,0.4); "
+                      "padding:0.4rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem;",
+            )
+        )
+    if is_last:
+        nav_buttons.append(
+            Button(
+                "Got it, let's go ", UkIcon("check", height=14, width=14),
+                hx_get=f"/tutorial?step={total}",
+                hx_target="#tutorial-overlay",
+                hx_swap="outerHTML",
+                style=f"background:{_IMMACULATA}; color:white; border:none; "
+                      "padding:0.4rem 1.2rem; border-radius:6px; cursor:pointer; font-size:0.85rem;",
+            )
+        )
+    else:
+        nav_buttons.append(
+            Button(
+                "Next ", UkIcon("arrow-right", height=14, width=14),
+                hx_get=f"/tutorial?step={step + 1}",
+                hx_target="#tutorial-overlay",
+                hx_swap="outerHTML",
+                style=f"background:{_IMMACULATA}; color:white; border:none; "
+                      "padding:0.4rem 1.2rem; border-radius:6px; cursor:pointer; font-size:0.85rem;",
+            )
+        )
+
+    # skip link (all steps except last)
+    skip = (
+        A(
+            "Skip tutorial",
+            hx_get=f"/tutorial?step={total}",
+            hx_target="#tutorial-overlay",
+            hx_swap="outerHTML",
+            style="color:rgba(255,255,255,0.55); font-size:0.75rem; cursor:pointer; "
+                  "text-decoration:underline; margin-top:0.75rem; display:inline-block;",
+        )
+        if not is_last
+        else Span()
+    )
+
+    card = Div(
+        dots,
+        Div(
+            UkIcon(s["icon"], height=28, width=28),
+            style="text-align:center; margin-bottom:0.5rem; color:white;",
+        ),
+        H3(
+            s["title"],
+            style="color:white; text-align:center; margin:0 0 0.75rem 0; font-size:1.4rem;",
+        ),
+        P(
+            s["body"],
+            style="color:rgba(255,255,255,0.9); text-align:center; line-height:1.6; "
+                  "font-size:0.95rem; margin:0 0 0.75rem 0;",
+        ),
+        P(
+            UkIcon("lightbulb", height=14, width=14),
+            f" {s['hint']}",
+            style="color:rgba(255,255,255,0.65); text-align:center; font-size:0.8rem; "
+                  "font-style:italic; margin:0 0 1.25rem 0;",
+        ),
+        Div(
+            *nav_buttons,
+            style="display:flex; justify-content:center; gap:0.75rem;",
+        ),
+        Div(skip, style="text-align:center;"),
+        P(
+            f"Step {step + 1} of {total}",
+            style="color:rgba(255,255,255,0.4); text-align:center; font-size:0.7rem; margin-top:0.75rem;",
+        ),
+        # frosted glass card
+        style=(
+            "background:rgba(0,59,112,0.82); backdrop-filter:blur(16px); "
+            "-webkit-backdrop-filter:blur(16px); "
+            "border:1px solid rgba(255,255,255,0.15); border-radius:16px; "
+            "padding:2rem 2.5rem; max-width:480px; width:90%; "
+            "box-shadow:0 8px 32px rgba(0,0,0,0.3);"
+        ),
+    )
+
+    return Div(
+        card,
+        id="tutorial-overlay",
+        style=(
+            "position:fixed; inset:0; z-index:9999; "
+            "display:flex; align-items:center; justify-content:center; "
+            "background:rgba(0,0,0,0.45); backdrop-filter:blur(2px); "
+            "-webkit-backdrop-filter:blur(2px);"
+        ),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # LAUNCHER SCREEN COMPONENTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -122,6 +324,7 @@ def trading_screen():
     """
     try:
         return Div(
+            tutorial_overlay(step=0),
             _navbar(),
             Div(
                 _daily_inference_section(),
@@ -364,21 +567,27 @@ def claude_analysis_card(data: dict):
                 Td(_ret(lgbm_s.get(key, {}))),
             ))
 
-        scoring_card = Card(
-            Table(
-                Thead(Tr(
-                    Th("Strategy"),
-                    Th(Span("LSTM-CNN", _tip("Return using the LSTM-CNN 7-class model's predictions."))),
-                    Th(Span("LGBM", _tip("Return using the LGBM 3-class model's predictions."))),
-                )),
-                Tbody(*scoring_rows),
-                cls="uk-table uk-table-small uk-table-divider",
+        scoring_card = Details(
+            Summary(
+                Div(
+                    UkIcon("bar-chart-2", height=18, width=18),
+                    H4(" Strategy Scoring", style=f"color:{_FOUNDERS}; display:inline; margin:0;"),
+                    style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;",
+                ),
+                style="list-style:none; padding:1rem;",
             ),
-            header=Div(
-                UkIcon("bar-chart-2", height=18, width=18),
-                H4(" Strategy Scoring", style=f"color:{_FOUNDERS}; display:inline;"),
-                style="display:flex; align-items:center; gap:0.5rem;",
+            Card(
+                Table(
+                    Thead(Tr(
+                        Th("Strategy"),
+                        Th(Span("LSTM-CNN", _tip("Return using the LSTM-CNN 7-class model's predictions."))),
+                        Th(Span("LGBM", _tip("Return using the LGBM 3-class model's predictions."))),
+                    )),
+                    Tbody(*scoring_rows),
+                    cls="uk-table uk-table-small uk-table-divider",
+                ),
             ),
+            style="border:1px solid #e5e5e5; border-radius:0.5rem; background:#fff;",
         )
 
         # ── Context summary ──

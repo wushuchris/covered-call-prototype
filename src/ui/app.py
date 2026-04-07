@@ -26,6 +26,7 @@ from src.ui.ui_components import (
     batch_results_card, backtest_results_card, model_performance_card,
     mlflow_experiments_card, claude_analysis_card,
     docs_screen, docs_section_response, TICKERS,
+    tutorial_overlay,
 )
 from src.ui.ui_handler import (
     handle_inference_call, handle_batch_inference,
@@ -127,6 +128,16 @@ def get():
     except Exception as e:
         logger.error(f"Error clearing trading screen: {e}")
         return Div(P("Error reloading.", cls="uk-text-danger"))
+
+
+@rt("/tutorial")
+def get(step: int = 0):
+    """Return a tutorial overlay step, or empty div to dismiss."""
+    try:
+        return tutorial_overlay(step=step)
+    except Exception as e:
+        logger.error(f"Error on tutorial step {step}: {e}")
+        return Div(id="tutorial-overlay")
 
 
 # pure htmx today-date swap — checkbox triggers this, replaces the date input with today's value pre-filled

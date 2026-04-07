@@ -400,6 +400,30 @@ Two parallel Claude sessions running simultaneously on the same branch. This ses
 
 **Next session priority**: Polish docs content for final submission, consider parallelizing batch context calls, explore contract-level dataset redesign (Idea 1)
 
+### 2026-04-07 - Session 7: Tutorial Overlay for New Users
+
+Two parallel Claude sessions. This session focused on onboarding UX - users found the UI too technical on first load.
+
+**Tutorial overlay (new):**
+- Built a 5-step transparent walkthrough overlay that appears when users enter the trading screen from the launcher
+- Step 1 (Welcome): explains it's a decision-support diagnostic, not a trading bot
+- Step 2 (Parameters): sidebar usage - date, ticker, All Stocks batch mode, Run Diagnostic
+- Step 3 (Results): dual-model predictions (LGBM + LSTM-CNN), confidence scores, candlestick chart
+- Step 4 (AI Analysis): Claude's strategy scoring, market context, recommended action with rationale
+- Step 5 (Ready): points to (?) tooltip icons and Docs page for deeper methodology
+- Frosted-glass card on semi-transparent backdrop (backdrop-filter blur, rgba overlay)
+- Progress dots, Back/Next navigation, "Skip tutorial" link on all non-final steps
+- Final step shows "Got it, let's go" button that dismisses the overlay
+- Pure htmx: each button does `hx-get="/tutorial?step=N"` swapping `#tutorial-overlay outerHTML`
+- Dismiss swaps to empty Div, removing overlay entirely - trading screen is fully interactive underneath
+- Zero JavaScript
+
+**Files changed:**
+- `src/ui/ui_components.py` - added `_TUTORIAL_STEPS` list, `tutorial_overlay()` function, wired into `trading_screen()` render
+- `src/ui/app.py` - added `tutorial_overlay` import, `GET /tutorial` route for step navigation
+
+**Next session priority**: (continuing in parallel session)
+
 ---
 
 ## Proposed Dataset Redesign (TEAM DECISION REQUIRED)
