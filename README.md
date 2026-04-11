@@ -419,7 +419,7 @@ Example output:
 api_docs_url       = "http://98.93.2.225:8000/docs"
 api_url            = "http://98.93.2.225:8000"
 instance_public_ip = "98.93.2.225"
-mlflow_url         = "http://98.93.2.225:5000"
+mlflow_url         = "http://98.93.2.225:5050"
 ssh_command        = "ssh -i ~/.ssh/covered-call-gpu-key.pem ec2-user@98.93.2.225"
 streamlit_url      = "http://98.93.2.225:8501"
 ```
